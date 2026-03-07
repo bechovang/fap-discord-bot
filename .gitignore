@@ -1,3 +1,6 @@
+# đoc digital ocean
+digitalOceanCLI_docs/
+
 # Environment variables
 .env
 .env.*
