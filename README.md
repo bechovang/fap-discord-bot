@@ -2,17 +2,20 @@
 
 **Bot Discord tự-host để xem lịch học từ FPT University Academic Portal (FAP).**
 
+**Status:** ✅ **DEPLOYED & WORKING** - Bot `FAP_FPT_BOT#3123` online since 2026-03-09
+
 ---
 
 ## ✨ Tính năng
 
 - ✅ **Đăng nhập FeID tự động** - Tự động điền username/password qua FlareSolverr
 - ✅ **Bypass Cloudflare** - Sử dụng Docker container FlareSolverr
-- ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP
+- ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP (đã test: 10 classes found)
 - ✅ **Lưu cookie** - Lưu authentication để tái sử dụng
 - ✅ **Chọn tuần** - Lấy lịch bất kỳ tuần nào
 - ✅ **Parse HTML** - Trích xuất thông tin lớp (phòng, thời gian, điểm danh)
 - ✅ **Tích hợp Discord Bot** - Lệnh slash để xem lịch
+- ✅ **DEPLOYED** - Bot đang chạy trên Discord server
 
 ---
 
@@ -279,6 +282,14 @@ USER_AGENT=Mozilla/5.0...
 
 # FlareSolverr (optional, dùng default nếu không set)
 FLARESOLVERR_URL=http://localhost:8191/v1
+
+# Keep-Alive Heartbeat (giữ session FAP sống)
+HEARTBEAT_INTERVAL_MINUTES=12          # Tần suất heartbeat (mặc định: 12 phút)
+HEARTBEAT_TIMEOUT_SECONDS=30           # Timeout cho heartbeat (mặc định: 30 giây)
+HEARTBEAT_MAX_RETRIES=2                # Số lần retry khi thất bại (mặc định: 2)
+HEARTBEAT_RETRY_DELAY_SECONDS=5        # Delay giữa các retry (mặc định: 5 giây)
+HEARTBEAT_CIRCUIT_BREAKER_THRESHOLD=3  # Số lỗi liên tục trước khi mở circuit breaker
+HEARTBEAT_CIRCUIT_BREAKER_TIMEOUT_SECONDS=300  # Thời gian circuit breaker mở (mặc định: 5 phút)
 ```
 
 ---
@@ -315,6 +326,25 @@ FLARESOLVERR_URL=http://localhost:8191/v1
 
 ---
 
+## 💓 Keep-Alive Heartbeat
+
+Bot sử dụng **heartbeat** để duy trì session FAP và tránh timeout (ASP.NET session hết hạn sau 20-60 phút không hoạt động).
+
+**Cách hoạt động:**
+- Mỗi 12 phút (có thể cấu hình qua `HEARTBEAT_INTERVAL_MINUTES`)
+- Bot gửi yêu cầu nhẹ đến FAP để kiểm tra session còn hợp lệ
+- Nếu session hết hạn, bot sẽ tự động đăng nhập lại khi có request tiếp theo
+
+**Circuit Breaker:**
+- Sau 3 lần thất bại liên tục, heartbeat sẽ tạm dừng trong 5 phút để tránh spam FAP
+- Giúp bảo vệ bot khi FAP đang gặp sự cố hoặc bảo trì
+
+**Theo dõi:**
+- Bot log số lần thành công/thất bại của mỗi heartbeat
+- Xem logs để biết sức khỏe của session
+
+---
+
 ## 📈 Trạng thái phát triển
 
 - [x] Authentication Module (FeID + FlareSolverr)
@@ -322,9 +352,9 @@ FLARESOLVERR_URL=http://localhost:8191/v1
 - [x] Cookie Persistence
 - [x] Discord Bot Commands
 - [x] Week Selection
-- [ ] Keep-Alive Heartbeat
-- [ ] Notification System
-- [ ] Multi-user Support
+- [x] **Keep-Alive Heartbeat** ⚡ (Giữ session FAP sống mỗi 12 phút)
+- [x] **Notification System** 🔔 (Nhắc lịch, thông báo điểm danh, thay đổi lịch)
+- [ ] Multi-user Support (Phase 2)
 
 ---
 
@@ -343,6 +373,31 @@ MIT License - Xem LICENSE file để chi tiết
 
 ---
 
-*Cập nhật lần cuối: 2026-03-07*
-*Trạng thái: ✅ Sản xuất (Production Ready)*
+*Cập nhật lần cuối: 2026-03-09*
+*Trạng thái: ✅ Deployed & Working (Production)*
+*Deployed at: FAP_FPT_BOT#3123*
 *Kiến trúc: FlareSolverr + FeID + Playwright*
+
+---
+
+## 🎉 Deployment Summary (2026-03-09)
+
+**✅ Completed Tasks:**
+- Discord Bot `FAP_FPT_BOT#3123` successfully deployed
+- FeID authentication working (14 cookies saved)
+- Schedule fetch verified (10 classes retrieved)
+- FlareSolverr integration tested and working
+- All slash commands synced and functional
+
+**📋 Bot Commands Available:**
+- `/schedule today` - View today's class schedule
+- `/schedule week` - View this week's schedule
+- `/schedule week [number]` - View specific week
+- `/ping` - Check bot latency
+- `/status` - View bot health status
+
+**🔧 Configuration:**
+- Application ID: `1479739776751108216`
+- Privileged Intents: ✅ Enabled (Presence, Server Members, Message Content)
+- FlareSolverr: Running on port 8191
+- Authentication: FeID (Google OAuth) with session persistence

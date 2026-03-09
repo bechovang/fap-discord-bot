@@ -27,7 +27,7 @@ class StatusCommands(commands.Cog):
         self.auth_instance = auth
 
     @app_commands.command(name="status", description="Check bot status")
-    async def bot_status(self, interaction: discord.Interaction):
+    async def get_status(self, interaction: discord.Interaction):
         """Show bot health and status"""
         try:
             # Calculate uptime
@@ -72,7 +72,7 @@ class StatusCommands(commands.Cog):
             await interaction.response.send_message(f"❌ Error: {str(e)}")
 
     @app_commands.command(name="ping", description="Check bot latency")
-    async def bot_ping(self, interaction: discord.Interaction):
+    async def ping_command(self, interaction: discord.Interaction):
         """Check bot latency"""
         latency = round(self.bot.latency * 1000)
         color = discord.Color.green() if latency < 200 else discord.Color.yellow() if latency < 500 else discord.Color.red()

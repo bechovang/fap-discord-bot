@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: fap-discord-bot
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - FAP_USERNAME=${FAP_USERNAME}
+      - FAP_PASSWORD=${FAP_PASSWORD}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
+      - DATABASE_PATH=data/fap.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-Asia/Ho_Chi_Minh}
+      - DEFAULT_CHANNEL_ID=${DEFAULT_CHANNEL_ID}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - flaresolverr
+    networks:
+      - bot-network
+
+  flaresolverr:
+    image: flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    ports:
+      - "8191:8191"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - HEADLESS=true
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge
