@@ -392,6 +392,73 @@ class FAPAutoLogin:
 
         return content
 
+    async def fetch_exam_schedule(self) -> str:
+        """Fetch exam schedule using saved cookies"""
+        EXAM_URL = "https://fap.fpt.edu.vn/Exam/ScheduleExams.aspx"
+
+        # Check if cookies file exists
+        if not Path(self.COOKIES_FILE).exists():
+            print(f"[!] No cookies found. Run login first.")
+            return None
+
+        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
+        with open(self.COOKIES_FILE, 'r') as f:
+            cookies = json.load(f)
+
+        print(f"[+] Loaded {len(cookies)} cookies")
+
+        self._playwright = await async_playwright().start()
+
+        # Launch browser WITHOUT persistent context, then add cookies
+        self._browser = await self._playwright.chromium.launch(
+            headless=self.headless,
+            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
+        )
+
+        self._page = await self._browser.new_page()
+
+        # Add cookies to the browser context
+        await self._page.context.add_cookies(cookies)
+        print("[.] Cookies added to browser context")
+
+        print("[.] Navigating to exam schedule page...")
+        await self._page.goto(EXAM_URL, timeout=60000)
+        await asyncio.sleep(5)
+
+        # Check current page
+        current_url = self._page.url
+        content = await self._page.content()
+        print(f"[.] Current URL: {current_url}")
+
+        # If on login page, try to navigate home first
+        if 'Login' in current_url or 'Default.aspx' in current_url:
+            print("[.] Not on exam page, navigating to home...")
+            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
+            await asyncio.sleep(3)
+
+            # Try exam page again
+            await self._page.goto(EXAM_URL, timeout=30000)
+            await asyncio.sleep(5)
+            content = await self._page.content()
+
+        # Check if we have exam schedule content
+        if 'Schedule Exam' not in content and 'table' not in content.lower():
+            print("[!] Exam page not loaded. Saving debug page...")
+            with open('debug_exam_fetch_page.html', 'w', encoding='utf-8') as f:
+                f.write(content)
+            print("[.] Saved to debug_exam_fetch_page.html")
+
+            await self._browser.close()
+            await self._playwright.stop()
+            return None
+
+        print("[.] Exam schedule page loaded successfully")
+
+        await self._browser.close()
+        await self._playwright.stop()
+
+        return content
+
 
 # Convenience functions
 async def login(feid: str, password: str):

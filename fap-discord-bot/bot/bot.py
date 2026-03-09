@@ -95,16 +95,8 @@ class FAPBot(commands.Bot):
         except Exception as e:
             logger.error(f"Failed to sync commands: {e}")
 
-        # Test FAP connection
-        if self.auth:
-            try:
-                page = await self.auth.get_session()
-                if page:
-                    logger.info("✅ FAP authentication successful")
-                else:
-                    logger.warning("⚠️ FAP authentication failed - check credentials")
-            except Exception as e:
-                logger.error(f"❌ FAP connection error: {e}")
+        # Note: FAP session will be validated on first command use
+        # No need to check at startup - keeps bot fast
 
     async def on_guild_join(self, guild):
         """Called when bot joins a guild"""

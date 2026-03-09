@@ -6,11 +6,15 @@ Automatically validates and refreshes session when needed.
 """
 import os
 import logging
+import asyncio
 from typing import Optional
 from .auto_login_feid import FAPAutoLogin
 from .session_validator import SessionValidator
 
 logger = logging.getLogger(__name__)
+
+# Global lock to prevent concurrent Chrome access
+_auth_lock = asyncio.Lock()
 
 
 class FAPAuth:
@@ -51,6 +55,7 @@ class FAPAuth:
         # Create FAPAutoLogin instance
         self._auth: Optional[FAPAutoLogin] = None
         self._validator: Optional[SessionValidator] = None
+        self._refreshing = False  # Flag to prevent concurrent refresh
 
     async def _ensure_auth(self):
         """Ensure FAPAutoLogin instance is created"""
@@ -70,51 +75,18 @@ class FAPAuth:
                 data_dir=self.data_dir
             )
 
-    async def _validate_and_refresh_if_needed(self) -> bool:
-        """
-        Validate session and refresh if needed
-
-        Returns:
-            True if session is valid (or was refreshed successfully)
-        """
-        if not self.auto_refresh:
-            return True
-
-        if not self.username or not self.password:
-            logger.warning("Auto-refresh disabled - missing credentials")
-            return True  # Don't block if no credentials
-
-        await self._ensure_validator()
-
-        # Check if session is healthy
-        if await self._validator.check_session_health():
-            logger.info("✅ Session is valid")
-            return True
-
-        # Session expired - need to refresh
-        logger.warning("⚠️ Session expired, attempting auto-refresh...")
-
-        # Use non-headless for refresh (Cloudflare)
-        success = await self._validator.refresh_session(headless=False)
-
-        if success:
-            logger.info("✅ Session refreshed successfully")
-        else:
-            logger.error("❌ Session refresh failed")
-
-        return success
-
-    async def get_session(self, force_refresh: bool = False):
+    async def get_session(self, force_refresh: bool = False, fast_check: bool = True):
         """
         Get authenticated session with auto-refresh
 
         Args:
             force_refresh: Force re-authentication
+            fast_check: Use fast file age check instead of browser (default: True)
 
         Returns:
-            self (for chaining fetch_schedule calls) or None if failed
+            self if session valid, None if failed
         """
-        await self._ensure_auth()
+        await self._ensure_validator()
 
         # Check cookies file exists
         from pathlib import Path
@@ -124,7 +96,7 @@ class FAPAuth:
             logger.warning("No cookies found.")
             if self.auto_refresh and self.username and self.password:
                 logger.info("🔄 Auto-refresh enabled - attempting login...")
-                if await self._validate_and_refresh_if_needed():
+                if await self._refresh_session_once():
                     return self
                 else:
                     return None
@@ -135,10 +107,46 @@ class FAPAuth:
 
         # Validate and refresh if needed
         if force_refresh or self.auto_refresh:
-            if not await self._validate_and_refresh_if_needed():
-                logger.warning("⚠️ Session validation failed")
+            # Fast check: just verify cookies are recent (no browser launch)
+            if not await self._validator.check_session_health(fast_check=fast_check):
+                if not await self._refresh_session_once():
+                    logger.warning("⚠️ Session validation failed")
+                    return None
 
         return self
+
+    async def _refresh_session_once(self) -> bool:
+        """
+        Refresh session once (with lock to prevent concurrent refresh)
+
+        Returns:
+            True if session is valid (or was refreshed successfully)
+        """
+        # If already refreshing, wait for it to complete
+        if self._refreshing:
+            logger.info("[.] Refresh already in progress, waiting...")
+            while self._refreshing:
+                await asyncio.sleep(0.5)
+            # After waiting, check if session is now valid
+            await self._ensure_validator()
+            return await self._validator.check_session_health()
+
+        # Start refresh
+        self._refreshing = True
+        try:
+            logger.warning("⚠️ Session expired, attempting auto-refresh...")
+
+            await self._ensure_validator()
+            success = await self._validator.refresh_session(headless=False)
+
+            if success:
+                logger.info("✅ Session refreshed successfully")
+            else:
+                logger.error("❌ Session refresh failed")
+
+            return success
+        finally:
+            self._refreshing = False
 
     async def fetch_schedule(self, week: Optional[int] = None, year: Optional[int] = None) -> Optional[str]:
         """
@@ -151,25 +159,46 @@ class FAPAuth:
         Returns:
             HTML content or None if failed
         """
-        await self._ensure_auth()
+        async with _auth_lock:  # Prevent concurrent Chrome access
+            await self._ensure_auth()
 
-        # First attempt
-        html = await self._auth.fetch_schedule(week=week, year=year)
+            # Try fetch first
+            html = await self._auth.fetch_schedule(week=week, year=year)
 
-        # If failed and auto-refresh is enabled, try to refresh and retry
-        if not html and self.auto_refresh:
-            logger.warning("⚠️ Fetch failed - attempting auto-refresh...")
+            # If failed and auto-refresh enabled, refresh and retry
+            if not html and self.auto_refresh:
+                if await self._refresh_session_once():
+                    logger.info("✅ Session refreshed - retrying fetch...")
+                    html = await self._auth.fetch_schedule(week=week, year=year)
+                else:
+                    logger.error("❌ Fetch failed after refresh")
 
-            if await self._validate_and_refresh_if_needed():
-                logger.info("✅ Session refreshed - retrying fetch...")
-                html = await self._auth.fetch_schedule(week=week, year=year)
+            return html
 
-            if not html:
-                logger.error("❌ Fetch failed after refresh")
+    async def fetch_exam_schedule(self) -> Optional[str]:
+        """
+        Fetch exam schedule HTML with auto-refresh on failure
 
-        return html
+        Returns:
+            HTML content or None if failed
+        """
+        async with _auth_lock:  # Prevent concurrent Chrome access
+            await self._ensure_auth()
+
+            # Try fetch first
+            html = await self._auth.fetch_exam_schedule()
+
+            # If failed and auto-refresh enabled, refresh and retry
+            if not html and self.auto_refresh:
+                if await self._refresh_session_once():
+                    logger.info("✅ Session refreshed - retrying fetch...")
+                    html = await self._auth.fetch_exam_schedule()
+                else:
+                    logger.error("❌ Fetch failed after refresh")
+
+            return html
 
     async def close(self):
         """Close browser and cleanup"""
-        # FAPAutoLogin creates/closes browser per fetch_schedule call
+        # FAPAutoLogin creates/closes browser per fetch call
         pass

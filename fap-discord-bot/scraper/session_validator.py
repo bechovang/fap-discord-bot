@@ -25,9 +25,24 @@ class SessionValidator:
         """Check if session files exist"""
         return self.cookies_file.exists() and self.profile_dir.exists()
 
-    async def check_session_health(self) -> bool:
+    def is_session_fresh(self, max_age_hours: int = 2) -> bool:
+        """
+        Fast check: verify cookies file is recent (within max_age_hours)
+        This avoids launching Chrome just to check session validity
+        """
+        if not self.cookies_file.exists():
+            return False
+
+        import time
+        file_age = time.time() - self.cookies_file.stat().st_mtime
+        return file_age < (max_age_hours * 3600)
+
+    async def check_session_health(self, fast_check: bool = False) -> bool:
         """
         Check if current session is actually working
+
+        Args:
+            fast_check: If True, only check file age (no browser launch)
 
         Returns:
             True if session can access FAP, False otherwise
@@ -35,7 +50,21 @@ class SessionValidator:
         if not self.is_session_valid():
             return False
 
+        # Fast check: just verify cookies are recent (within 2 hours)
+        if fast_check:
+            return self.is_session_fresh(max_age_hours=2)
+
+        # Full check: launch browser and verify access
         try:
+            # Kill Chrome processes first to avoid profile lock
+            import subprocess
+            try:
+                subprocess.run(['taskkill', '/F', '/IM', 'chrome.exe', '/T'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                await asyncio.sleep(1)
+            except:
+                pass
+
             async with async_playwright() as p:
                 browser = await p.chromium.launch_persistent_context(
                     user_data_dir=str(self.profile_dir),
