@@ -7,8 +7,14 @@ from discord import app_commands
 from discord.ext import commands
 from typing import Optional
 import logging
-from ...scraper.auth import FAPAuth
-from ...scraper.parser import FAPParser
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from scraper.auth import FAPAuth
+from scraper.parser import FAPParser
 
 logger = logging.getLogger(__name__)
 

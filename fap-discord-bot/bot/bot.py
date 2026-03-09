@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scraper.auth import FAPAuth
 from bot.commands.schedule import setup as setup_schedule
 from bot.commands.status import setup as setup_status, StatusCommands
+from bot.commands.exam import setup as setup_exam
 
 # Configure logging
 logging.basicConfig(
@@ -73,6 +74,7 @@ class FAPBot(commands.Bot):
         # Load cogs
         await setup_schedule(self)
         await setup_status(self)
+        await setup_exam(self)
 
         # Set auth reference in status cog
         self.status_cog = self.get_cog('StatusCommands')
