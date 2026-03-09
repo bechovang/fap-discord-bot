@@ -94,8 +94,15 @@ fap-discord-bot/
 │   └── docker-compose.yml      ← Docker Compose config
 │
 ├── 📚 Tài liệu
-│   ├── README.md                       ← File này
-│   └── _bmad-output/                   ← BMM agent output
+│   ├── README.md                       ← File này (bắt đầu từ đây!)
+│   ├── CHANGELOG.md                    ← Lịch sử thay đổi
+│   └── docs/                           ← Tài liệu chi tiết
+│       ├── DEVELOPMENT.md              ← Hướng dẫn phát triển
+│       ├── ARCHITECTURE.md             ← Kiến trúc hệ thống
+│       ├── features/                   ← Tài liệu feature
+│       │   └── EXAM.md                 ← Exam schedule feature
+│       └── archive/                    ← Tài liệu cũ (deprecated)
+│           └── FLARESOLVERR.md         ← FlareSolverr guide (đã cũ)
 │
 ├── 🚀 Entry Points
 │   ├── main.py                 ← Entry point bot
@@ -349,6 +356,45 @@ cat exam_schedule_final.html
 - [ ] Keep-Alive Heartbeat
 - [ ] Notification System
 - [ ] Multi-user Support
+
+---
+
+## 📚 Tài liệu
+
+### Tài liệu chính
+
+| Tài liệu | Mô tả |
+|----------|-------|
+| **[README.md](README.md)** | Tài liệu chính của project (file này) |
+| **[CHANGELOG.md](CHANGELOG.md)** | Lịch sử thay đổi phiên bản |
+| **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** | Hướng dẫn phát triển & logic chi tiết |
+
+### Tài liệu kỹ thuật
+
+| Tài liệu | Mô tả |
+|----------|-------|
+| **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Kiến trúc chi tiết với flow diagram |
+| **[features/EXAM.md](docs/features/EXAM.md)** | Tài liệu tính năng Exam Schedule |
+
+### Tài liệu archive (đã cũ)
+
+| Tài liệu | Trạng thái |
+|----------|------------|
+| **[archive/FLARESOLVERR.md](docs/archive/FLARESOLVERR.md)** | ⚠️ Đã thay bằng non-headless Chrome |
+| `scraper/archive/*.md` | Các phương pháp experiment đã archive |
+
+### Cấu trúc nhanh
+
+```
+fap-discord-bot/
+├── README.md                    ← Bắt đầu từ đây
+├── CHANGELOG.md                 ← Cập nhật phiên bản
+└── docs/
+    ├── DEVELOPMENT.md           ← Hướng dẫn dev
+    ├── ARCHITECTURE.md          ← Kiến trúc hệ thống
+    └── features/
+        └── EXAM.md              ← Tài liệu feature Exam
+```
 
 ---
 
