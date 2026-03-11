@@ -715,6 +715,30 @@ class GradeCommands(commands.GroupCog, name="grade"):
                 for grade_range, count in sorted(gpa_summary.grade_breakdown.items()):
                     lines.append(f"• {grade_range}: {count}")
 
+            # Subject list with grades
+            lines.append("")
+            lines.append("**All Subjects:**")
+            for term_name in sorted(all_grades.keys(), reverse=True):
+                term_grades = all_grades[term_name]
+                lines.append(f"\n**{term_name}:**")
+                for grade in term_grades:
+                    # Grade letter
+                    if grade.total >= 8.5:
+                        grade_letter = 'A'
+                    elif grade.total >= 7.0:
+                        grade_letter = 'B'
+                    elif grade.total >= 5.5:
+                        grade_letter = 'C'
+                    elif grade.total >= 4.0:
+                        grade_letter = 'D'
+                    elif grade.total > 0:
+                        grade_letter = 'F'
+                    else:
+                        grade_letter = '-'
+
+                    status_emoji = '✅' if grade.status == "Passed" else '❌' if grade.status == "Is Suspended" else '⏳'
+                    lines.append(f"  {status_emoji} **{grade.subject_code}**: {grade.total}/10 ({grade_letter}) | 4.0: {grade.grade_4scale}")
+
             message = "\n".join(lines)
 
             if len(message) > 1900:

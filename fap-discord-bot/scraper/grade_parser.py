@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 MAX_RECENT_TERMS = 10
 
 # Non-GPA subjects to exclude from calculations
-EXCLUDED_SUBJECTS = ['PE', 'MUSIC', 'ENG', 'EN', 'PHYSICAL_EDUCATION']
+EXCLUDED_SUBJECTS = ['PE', 'MUSIC', 'ENG', 'EN', 'PHYSICAL_EDUCATION', 'VOV', 'ENT']
 
 # Grade scale conversion (10-point to 4-point)
 GRADE_SCALE = {
@@ -711,6 +711,24 @@ class GradeParser:
             if any(g.subject_code.startswith(prefix) for prefix in self.exclude_subjects)
         ]
 
+        # Handle retakes: for each subject code, keep only the best grade
+        # Priority: Passed > Failed, then higher total grade
+        subject_best = {}
+        for g in filtered_grades:
+            code = g.subject_code
+            if code not in subject_best:
+                subject_best[code] = g
+            else:
+                existing = subject_best[code]
+                # Prefer passed over failed
+                if g.status == "Passed" and existing.status != "Passed":
+                    subject_best[code] = g
+                # If both passed or both failed, take higher grade
+                elif g.status == existing.status and g.total > existing.total:
+                    subject_best[code] = g
+
+        filtered_grades = list(subject_best.values())
+
         # Calculate term GPA - simple average (no credits weighting)
         valid_grades = [g for g in filtered_grades if g.total > 0]
         if valid_grades:
@@ -751,11 +769,29 @@ class GradeParser:
                 )
 
             # Calculate cumulative - simple average (no credits weighting)
-            all_valid_grades = [
+            # First, handle retakes across all terms
+            all_grades_list = [
                 g for term_grades in all_filtered.values()
                 for g in term_grades
                 if g.total > 0
             ]
+
+            # Apply retake handling: keep best grade for each subject
+            subject_best_cumulative = {}
+            for g in all_grades_list:
+                code = g.subject_code
+                if code not in subject_best_cumulative:
+                    subject_best_cumulative[code] = g
+                else:
+                    existing = subject_best_cumulative[code]
+                    # Prefer passed over failed
+                    if g.status == "Passed" and existing.status != "Passed":
+                        subject_best_cumulative[code] = g
+                    # If both passed or both failed, take higher grade
+                    elif g.status == existing.status and g.total > existing.total:
+                        subject_best_cumulative[code] = g
+
+            all_valid_grades = list(subject_best_cumulative.values())
             if all_valid_grades:
                 cumulative_gpa = sum(g.grade_4scale for g in all_valid_grades) / len(all_valid_grades)
             else:

@@ -11,7 +11,7 @@
 - ✅ **Đăng nhập FeID tự động** - Tự động điền username/password qua FlareSolverr
 - ✅ **Bypass Cloudflare** - Sử dụng Docker container FlareSolverr
 - ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP
-- ✅ **Xem điểm số** - Xem điểm học kỳ và GPA tích lũy
+- ✅ **Xem điểm số** - Xem điểm học kỳ và GPA tích lũy (tự động xử lý thi lại, loại bỏ môn không tính GPA)
 - ✅ **Điểm danh** - Xem thống kê điểm danh theo kỳ
 - ✅ **Lịch thi** - Xem lịch thi sắp tới
 - ✅ **Lưu cookie** - Lưu authentication để tái sử dụng

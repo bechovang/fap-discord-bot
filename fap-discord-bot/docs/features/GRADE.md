@@ -124,6 +124,8 @@ Các môn sau **không** được tính vào GPA:
 - `MUSIC` - Music
 - `ENG` / `EN` - English
 - `PHYSICAL_EDUCATION`
+- `VOV` - Vovinam
+- `ENT` - Entrepreneurship
 
 ---
 
@@ -232,6 +234,21 @@ for grade in grades:
 
 gpa = total_4scale / count if count > 0 else 0.0
 ```
+
+### Retake Handling (Thi lại)
+
+Khi một môn có nhiều lần thi (rớt rồi đậu lại):
+- Chỉ tính điểm **đậu cao nhất** vào GPA
+- Ưu tiên: Passed > Failed
+- Cùng status thì lấy điểm tổng kết cao hơn
+
+Ví dụ:
+```
+PRO192: 2.1/10 (F) - Failed  → Bỏ qua
+PRO192: 9.4/10 (A) - Passed → Tính vào GPA
+```
+
+---
 
 ---
 
