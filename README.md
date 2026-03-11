@@ -10,11 +10,14 @@
 
 - ✅ **Đăng nhập FeID tự động** - Tự động điền username/password qua FlareSolverr
 - ✅ **Bypass Cloudflare** - Sử dụng Docker container FlareSolverr
-- ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP (đã test: 10 classes found)
+- ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP
+- ✅ **Xem điểm số** - Xem điểm học kỳ và GPA tích lũy
+- ✅ **Điểm danh** - Xem thống kê điểm danh theo kỳ
+- ✅ **Lịch thi** - Xem lịch thi sắp tới
 - ✅ **Lưu cookie** - Lưu authentication để tái sử dụng
-- ✅ **Chọn tuần** - Lấy lịch bất kỳ tuần nào
-- ✅ **Parse HTML** - Trích xuất thông tin lớp (phòng, thời gian, điểm danh)
-- ✅ **Tích hợp Discord Bot** - Lệnh slash để xem lịch
+- ✅ **Auto-refresh session** - Tự động đăng nhập lại khi session hết hạn
+- ✅ **Parse HTML** - Trích xuất thông tin lớp, điểm, điểm danh
+- ✅ **Tích hợp Discord Bot** - Lệnh slash để xem tất cả thông tin
 - ✅ **DEPLOYED** - Bot đang chạy trên Discord server
 
 ---
@@ -130,15 +133,20 @@ fap-discord-bot/
 │   │   ├── __init__.py
 │   │   ├── auth.py             ← Adapter (FAPAuth interface cho bot)
 │   │   ├── auto_login_feid.py  ← Auth chính (FeID + Playwright)
+│   │   ├── grade_parser.py     ← Grade & GPA parser
+│   │   ├── session_validator.py← Session validation & refresh
 │   │   ├── flaresolverr_auth.py← FlareSolverr integration
 │   │   ├── cloudflare.py       ← Turnstile solver
-│   │   ├── parser.py           ← HTML parser
 │   │   └── archive/            ← Files experiment (đã archive)
 │   ├── bot/                    ← Discord bot
 │   │   ├── bot.py              ← Main bot class
 │   │   └── commands/
-│   │       ├── schedule.py     ← Lệnh lịch
+│   │       ├── schedule.py     ← Lệnh lịch học
+│   │       ├── grade.py        ← Lệnh điểm số
+│   │       ├── attendance.py   ← Lệnh điểm danh
+│   │       ├── exam.py         ← Lệnh lịch thi
 │   │       └── status.py       ← Lệnh trạng thái
+│   │       └── __init__.py
 │   └── utils/                  ← Utility functions
 │
 └── 📄 Debug
@@ -254,10 +262,26 @@ python scraper/auto_login_feid.py fetch 5 2026
 ### Lệnh Discord Bot
 
 ```
-/schedule today    - Xem lịch hôm nay
-/schedule week     - Xem lịch tuần này
-/schedule week 5   - Xem lịch tuần 5
-/status            - Kiểm tra trạng thái bot
+/schedule
+  /schedule today     - Xem lịch hôm nay
+  /schedule week      - Xem lịch tuần này
+  /schedule week 5    - Xem lịch tuần 5
+
+/grade
+  /grade view         - Xem điểm với menu tương tác
+  /grade this-term    - Xem điểm học kỳ hiện tại
+  /grade gpa          - Xem GPA tích lũy tất cả các kỳ
+
+/attendance
+  /attendance view    - Xem điểm danh với menu
+  /attendance this-term - Xem điểm danh kỳ hiện tại
+
+/exam
+  /exam schedule      - Xem lịch thi
+  /exam upcoming      - Xem các bài thi sắp tới
+
+/status               - Kiểm tra trạng thái bot
+/ping                 - Kiểm tra kết nối
 ```
 
 ---
@@ -373,7 +397,7 @@ MIT License - Xem LICENSE file để chi tiết
 
 ---
 
-*Cập nhật lần cuối: 2026-03-09*
+*Cập nhật lần cuối: 2026-03-11*
 *Trạng thái: ✅ Deployed & Working (Production)*
 *Deployed at: FAP_FPT_BOT#3123*
 *Kiến trúc: FlareSolverr + FeID + Playwright*
@@ -390,11 +414,18 @@ MIT License - Xem LICENSE file để chi tiết
 - All slash commands synced and functional
 
 **📋 Bot Commands Available:**
-- `/schedule today` - View today's class schedule
-- `/schedule week` - View this week's schedule
-- `/schedule week [number]` - View specific week
-- `/ping` - Check bot latency
-- `/status` - View bot health status
+- `/schedule today` - Xem lịch hôm nay
+- `/schedule week` - Xem lịch tuần này
+- `/schedule week [number]` - Xem lịch tuần cụ thể
+- `/grade view` - Xem điểm với menu tương tác
+- `/grade this-term` - Xem điểm học kỳ hiện tại
+- `/grade gpa` - Xem GPA tích lũy
+- `/attendance view` - Xem điểm danh
+- `/attendance this-term` - Xem điểm danh kỳ hiện tại
+- `/exam schedule` - Xem lịch thi
+- `/exam upcoming` - Xem các bài thi sắp tới
+- `/ping` - Kiểm tra kết nối
+- `/status` - Kiểm tra trạng thái bot
 
 **🔧 Configuration:**
 - Application ID: `1479739776751108216`

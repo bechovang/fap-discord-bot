@@ -216,15 +216,39 @@ class GradeParser:
                 course_id_match = re.search(r'course=(\d+)', href)
                 course_id = course_id_match.group(1) if course_id_match else None
 
-                # Parse subject code from text (e.g., "Discrete mathematics (MAD101)")
-                code_match = re.search(r'\(([A-Z]{3}\d{3})\)', text)
-                code = code_match.group(1) if code_match else ''
+                # Parse subject code from text with multiple fallback patterns
+                # Pattern 1: Standard (MAD101), Pattern 2: 2-4 letters + 2-4 digits (ENG101, CS101, PRO10)
+                # Pattern 3: Just uppercase word (ENGLISH, PHYSICS)
+                code = None
+                patterns = [
+                    r'\(([A-Z]{3}\d{3})\)',      # MAD101
+                    r'\(([A-Z]{2,4}\d{2,4})\)',  # ENG101, CS101, PRF192
+                    r'\(([A-Z]{4,})\)',          # ENGLISH
+                    r'([A-Z]{3}\d{3})\s*\(',     # MAD101 (at start)
+                    r'([A-Z]{2,4}\d{2,4})\s*\(', # ENG101 (at start)
+                ]
+
+                for pattern in patterns:
+                    match = re.search(pattern, text)
+                    if match:
+                        code = match.group(1)
+                        break
+
+                if not code:
+                    # Last resort: try to extract any uppercase word-number combo
+                    fallback_match = re.search(r'([A-Z]{2,}\d{2,})', text)
+                    if fallback_match:
+                        code = fallback_match.group(1)
+
+                # Log if we still couldn't find a code
+                if not code:
+                    logger.warning(f"Could not extract course code from: {text[:60]}")
 
                 # All courses in base page have course_id (no bold "current" course in base view)
                 if course_id:
                     courses.append({
                         'course_id': int(course_id),
-                        'code': code,
+                        'code': code or '',
                         'name': text,
                         'is_current': False
                     })
@@ -239,12 +263,13 @@ class GradeParser:
         logger.info(f"Extracted {len(courses)} courses")
         return courses
 
-    def parse_grades(self, html: str) -> List[GradeItem]:
+    def parse_grades(self, html: str, expected_subject_code: str = None) -> List[GradeItem]:
         """
         Parse grade records from page
 
         Args:
             html: Page HTML content
+            expected_subject_code: Optional subject code to use instead of parsing from HTML
 
         Returns:
             List of GradeItem objects
@@ -259,7 +284,7 @@ class GradeParser:
             # This is a detailed grade page for a specific course
             table = grade_div.find('table')
             if table:
-                return self._parse_detailed_grade_table(table, soup)
+                return self._parse_detailed_grade_table(table, soup, expected_subject_code)
 
         # Fall back to looking for summary table (list of all subjects)
         # Method 1: By ID
@@ -289,12 +314,17 @@ class GradeParser:
 
         return self._parse_summary_grade_table(table)
 
-    def _parse_detailed_grade_table(self, table, soup) -> List[GradeItem]:
+    def _parse_detailed_grade_table(self, table, soup, expected_subject_code: str = None) -> List[GradeItem]:
         """Parse detailed grade table for a single course
 
         Table structure:
         - Headers: Grade category | Grade item | Weight | Value | Comment
         - Footer: Average (total grade) | Status
+
+        Args:
+            table: The grade table element
+            soup: BeautifulSoup object
+            expected_subject_code: Subject code to use instead of parsing from HTML
         """
         items = []
 
@@ -302,27 +332,34 @@ class GradeParser:
         h2 = soup.find('h2')
         student_info = h2.get_text() if h2 else ""
 
-        # Get course name from divCourse - find the <b> tag (current course)
-        course_div = soup.find('div', {'id': 'ctl00_mainContent_divCourse'})
-        course_name = "Unknown Course"
-        if course_div:
-            b_tag = course_div.find('b')
-            if b_tag:
-                course_text = b_tag.get_text(strip=True)
-                # Extract course code from parentheses
-                code_match = re.search(r'\(([A-Z]{3}\d{3})\)', course_text)
-                subject_code = code_match.group(1) if code_match else "UNKNOWN"
-                course_name = course_text
-            else:
-                # Try from links
-                first_link = course_div.find('a')
-                if first_link:
-                    course_text = first_link.get_text(strip=True)
+        # Use expected subject code if provided, otherwise try to parse from HTML
+        if expected_subject_code:
+            subject_code = expected_subject_code
+            course_name = f"Course {expected_subject_code}"
+        else:
+            # Get course name from divCourse - find the <b> tag (current course)
+            course_div = soup.find('div', {'id': 'ctl00_mainContent_divCourse'})
+            course_name = "Unknown Course"
+            if course_div:
+                b_tag = course_div.find('b')
+                if b_tag:
+                    course_text = b_tag.get_text(strip=True)
+                    # Extract course code from parentheses
                     code_match = re.search(r'\(([A-Z]{3}\d{3})\)', course_text)
                     subject_code = code_match.group(1) if code_match else "UNKNOWN"
                     course_name = course_text
                 else:
-                    subject_code = "UNKNOWN"
+                    # Try from links
+                    first_link = course_div.find('a')
+                    if first_link:
+                        course_text = first_link.get_text(strip=True)
+                        code_match = re.search(r'\(([A-Z]{3}\d{3})\)', course_text)
+                        subject_code = code_match.group(1) if code_match else "UNKNOWN"
+                        course_name = course_text
+                    else:
+                        subject_code = "UNKNOWN"
+            else:
+                subject_code = "UNKNOWN"
 
         # Find the footer with Average and Status
         tfoot = table.find('tfoot')
@@ -674,10 +711,12 @@ class GradeParser:
             if any(g.subject_code.startswith(prefix) for prefix in self.exclude_subjects)
         ]
 
-        # Calculate term GPA
-        total_points = sum(g.grade_4scale * g.credits for g in filtered_grades if g.total > 0)
-        total_credits = sum(g.credits for g in filtered_grades if g.total > 0)
-        term_gpa = total_points / total_credits if total_credits > 0 else 0.0
+        # Calculate term GPA - simple average (no credits weighting)
+        valid_grades = [g for g in filtered_grades if g.total > 0]
+        if valid_grades:
+            term_gpa = sum(g.grade_4scale for g in valid_grades) / len(valid_grades)
+        else:
+            term_gpa = 0.0
 
         # Calculate cumulative GPA across all terms
         cumulative_gpa = term_gpa
@@ -692,42 +731,40 @@ class GradeParser:
                 ]
                 all_filtered[term] = filtered
 
-                # Calculate term GPA
-                points = sum(g.grade_4scale * g.credits for g in filtered if g.total > 0)
-                creds = sum(g.credits for g in filtered if g.total > 0)
-                t_gpa = points / creds if creds > 0 else 0.0
-                earned = sum(g.credits for g in filtered if g.status == "Passed")
+                # Calculate term GPA - simple average (no credits weighting)
+                valid_filtered = [g for g in filtered if g.total > 0]
+                if valid_filtered:
+                    t_gpa = sum(g.grade_4scale for g in valid_filtered) / len(valid_filtered)
+                else:
+                    t_gpa = 0.0
                 passed = sum(1 for g in filtered if g.status == "Passed")
                 failed = sum(1 for g in filtered if g.status == "Is Suspended")
+                earned = passed  # For display purposes - just count passed subjects
 
                 by_term[term] = TermGPA(
                     term=term,
                     term_gpa=round(t_gpa, 2),
                     credits_earned=earned,
-                    credits_total=creds,
+                    credits_total=passed + failed,  # Total subjects count
                     subjects_passed=passed,
                     subjects_failed=failed
                 )
 
-            # Calculate cumulative
-            cum_points = sum(
-                g.grade_4scale * g.credits
-                for term_grades in all_filtered.values()
+            # Calculate cumulative - simple average (no credits weighting)
+            all_valid_grades = [
+                g for term_grades in all_filtered.values()
                 for g in term_grades
                 if g.total > 0
-            )
-            cum_credits = sum(
-                g.credits
-                for term_grades in all_filtered.values()
-                for g in term_grades
-                if g.total > 0
-            )
-            cumulative_gpa = cum_points / cum_credits if cum_credits > 0 else 0.0
+            ]
+            if all_valid_grades:
+                cumulative_gpa = sum(g.grade_4scale for g in all_valid_grades) / len(all_valid_grades)
+            else:
+                cumulative_gpa = 0.0
 
         # Count passed/failed
         subjects_passed = sum(1 for g in filtered_grades if g.status == "Passed")
         subjects_failed = sum(1 for g in filtered_grades if g.status == "Is Suspended")
-        earned_credits = sum(g.credits for g in filtered_grades if g.status == "Passed")
+        total_subjects = subjects_passed + subjects_failed  # Instead of credits
 
         # Grade breakdown
         grade_breakdown = {}
@@ -745,8 +782,8 @@ class GradeParser:
             term=None,
             term_gpa=round(term_gpa, 2),
             cumulative_gpa=round(cumulative_gpa, 2),
-            total_credits=total_credits,
-            earned_credits=earned_credits,
+            total_credits=total_subjects,  # Now using subject count instead of credits
+            earned_credits=subjects_passed,  # Passed subjects count
             subjects_passed=subjects_passed,
             subjects_failed=subjects_failed,
             grade_breakdown=grade_breakdown,

@@ -223,36 +223,34 @@ else:
 Tính GPA từ danh sách điểm:
 
 ```python
+# GPA được tính theo TRUNG BÌNH CỘNG các môn (không weigh theo credits)
 for grade in grades:
     if grade.subject_code not in EXCLUDED_SUBJECTS:
-        if grade.status == "Passed":
-            total_4scale += grade.grade_4scale * grade.credits
-            total_credits += grade.credits
-            earned_credits += grade.credits
-        elif grade.status == "Is Suspended":
-            total_credits += grade.credits
+        if grade.total > 0:
+            total_4scale += grade.grade_4scale
+            count += 1
 
-gpa = total_4scale / total_credits if total_credits > 0 else 0.0
+gpa = total_4scale / count if count > 0 else 0.0
 ```
 
 ---
 
 ## Known Issues & Limitations
 
-1. **Credits = 0**: Detailed grade view không hiển thị số tín chỉ
-   - **Workaround**: Sử dụng summary view để lấy credits
-   - **Impact**: GPA calculation có thể không chính xác
+1. **Credits not displayed**: GPA tính theo trung bình cộng (không weigh credits)
+   - **Reason**: Detailed grade view không hiển thị số tín chỉ
+   - **Solution**: GPA được tính bằng simple average của tất cả các môn
 
-2. **Course Code = UNKNOWN**: Một số môn không có course code trong HTML
-   - **Workaround**: Parser set subject_code = "UNKNOWN"
-   - **Impact**: Subject hiển thị là "UNKNOWN - Course Name"
+2. **Course Code Parsing**: Một số môn có format đặc biệt có thể không parse được
+   - **Fix**: Parser có nhiều regex patterns fallback
+   - **Status**: ✅ Improved
 
 3. **Interaction Timeout**: Discord interaction expire sau 3 seconds
    - **Fix**: Use `defer(ephemeral=True)` immediately
    - **Status**: ✅ Fixed
 
 4. **Slow Fetching**: Mỗi course = 1 browser instance mới
-   - **Impact**: 6 courses ≈ 30-60 seconds
+   - **Impact**: 18 courses ≈ 2-3 phút
    - **Future**: Reuse browser session across requests
 
 ---

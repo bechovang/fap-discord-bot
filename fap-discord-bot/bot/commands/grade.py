@@ -475,7 +475,9 @@ class GradeCommands(commands.GroupCog, name="grade"):
                     )
                     if course_html:
                         logger.info(f"  Course HTML length: {len(course_html)} chars")
-                        course_grades = self.parser.parse_grades(course_html)
+                        # Only pass expected_subject_code if we have a valid code
+                        expected_code = course['code'] if course['code'] else None
+                        course_grades = self.parser.parse_grades(course_html, expected_subject_code=expected_code)
                         logger.info(f"  Parsed {len(course_grades)} grade records")
                         # Add course code/name to grades (in case it's not in the parsed data)
                         for grade in course_grades:
@@ -623,13 +625,13 @@ class GradeCommands(commands.GroupCog, name="grade"):
                 await interaction.followup.send("❌ No terms found.", ephemeral=True)
                 return
 
-            # Fetch grades for all terms - use course-based fetch like grade_this_term
+            # Fetch grades for all terms - need to fetch each course individually
             all_grades = {}
             for i, term in enumerate(terms):
                 term_name = term['name']
                 logger.info(f"[{i+1}/{len(terms)}] Processing term: {term_name}")
 
-                # Fetch by term to get the course list for this term
+                # Fetch by term to get the course list
                 html = await auth.fetch_grades(
                     student_id=self.student_id,
                     term=term_name
@@ -657,19 +659,13 @@ class GradeCommands(commands.GroupCog, name="grade"):
                             course=course['course_id']
                         )
                         if course_html:
-                            course_grades = self.parser.parse_grades(course_html)
-                            # Add course info to grades
-                            for grade in course_grades:
-                                if not grade.subject_code:
-                                    grade.subject_code = course['code']
-                                if not grade.subject_name or grade.subject_name == grade.subject_code:
-                                    grade.subject_name = course['name'].split('(')[0].strip()
+                            # Only pass expected_subject_code if we have a valid code
+                            expected_code = course['code'] if course['code'] else None
+                            course_grades = self.parser.parse_grades(course_html, expected_subject_code=expected_code)
                             term_grades.extend(course_grades)
                             logger.info(f"      Parsed {len(course_grades)} grades")
                         else:
                             logger.warning(f"      No HTML for {course['code']}")
-                    else:
-                        logger.warning(f"    Skipping {course['code']} - no course_id")
 
                 if term_grades:
                     all_grades[term_name] = term_grades
