@@ -17,6 +17,8 @@ from scraper.auth import FAPAuth
 from bot.commands.schedule import setup as setup_schedule
 from bot.commands.status import setup as setup_status, StatusCommands
 from bot.commands.exam import setup as setup_exam
+from bot.commands.attendance import setup as setup_attendance
+from bot.commands.grade import setup as setup_grade
 
 # Configure logging
 logging.basicConfig(
@@ -75,6 +77,8 @@ class FAPBot(commands.Bot):
         await setup_schedule(self)
         await setup_status(self)
         await setup_exam(self)
+        await setup_attendance(self)
+        await setup_grade(self)
 
         # Set auth reference in status cog
         self.status_cog = self.get_cog('StatusCommands')
@@ -88,10 +92,24 @@ class FAPBot(commands.Bot):
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
         logger.info(f"Connected to {len(self.guilds)} guilds")
 
-        # Sync commands
+        # Sync commands - both global and guild
         try:
-            synced = await self.tree.sync()
-            logger.info(f"Synced {len(synced)} slash commands")
+            # Global sync (can take up to 1 hour to propagate)
+            synced_global = await self.tree.sync()
+            logger.info(f"Synced {len(synced_global)} global slash commands")
+
+            # Guild sync (instant)
+            for guild in self.guilds:
+                synced_guild = await self.tree.sync(guild=guild)
+                logger.info(f"Synced {len(synced_guild)} slash commands to guild: {guild.name}")
+
+            # Log all commands
+            logger.info("Available commands:")
+            for cmd in self.tree.get_commands():
+                logger.info(f"  - /{cmd.name}")
+                if hasattr(cmd, 'commands'):
+                    for subcmd in cmd.commands:
+                        logger.info(f"    - /{cmd.name} {subcmd.name}")
         except Exception as e:
             logger.error(f"Failed to sync commands: {e}")
 

@@ -2,7 +2,116 @@
 
 All notable changes to the FAP Discord Bot project.
 
-## [2026-03-09]
+## [2026-03-11] - Grade Feature Improvements
+
+### Fixed
+
+#### Grade Parsing & Discord Interaction
+- **`bot/commands/grade.py`** - Fixed Discord interaction timeout issue
+  - Changed from `defer(thinking=True)` to `defer(ephemeral=True)` for faster response
+  - Added proper exception handling for `NotFound` (404) and `HTTPException` (40060)
+  - Removed fallback `send_message` after failed defer (causes double-acknowledge error)
+  - Added detailed logging for debugging:
+    - Base page HTML length
+    - Number of courses extracted
+    - Per-course HTML fetch results
+    - Grades parsed per course
+    - Total grades collected
+
+- **`scraper/grade_parser.py`** - Improved grade table parsing
+  - Split parsing into two methods: `_parse_detailed_grade_table()` and `_parse_summary_grade_table()`
+  - Detailed grade table: Parses footer for Average (total grade) and Status
+  - Falls back to summary table if grade div not found
+  - Saves debug HTML to `debug_grade_parse_error.html` when parsing fails
+
+### Changed
+
+- All followup messages in grade commands now use `ephemeral=True` consistently
+- Grade fetching now logs each step for better debugging
+
+### Known Issues
+
+- Credits showing as 0: Detailed grade view doesn't display credit count
+- Some courses show "UNKNOWN" as subject code when HTML doesn't contain course code pattern
+- Grade fetching is slow (~30-60s for 6 courses) because each course creates a new browser instance
+
+---
+
+## [2026-03-11] - Attendance & Grade Features
+
+### Added
+
+#### Attendance Tracking
+- **`scraper/attendance_parser.py`** - New parser for attendance data
+  - `AttendanceItem` dataclass with fields: no, subject_code, subject_name, room, day, date, slot, start_time, end_time, attendance_status, lecturer, group_name, credits
+  - `AttendanceSummary` dataclass for statistics (total, present, absent, future, percentage)
+  - `AttendanceParser` class with methods: `extract_terms()`, `extract_courses()`, `parse_attendance()`, `calculate_summary()`, `format_for_discord()`
+  - Support for parsing term list (limited to 10 most recent terms)
+  - Support for parsing course list and attendance records
+  - Attendance status detection via font color attributes (green=present, red=absent)
+
+- **`bot/commands/attendance.py`** - New Discord slash commands
+  - `/attendance view [term] [course]` - Interactive attendance viewer with dropdown menus
+  - `/attendance this-term` - Quick view attendance for most recent term
+  - Interactive `AttendanceView` with term/course selectors and refresh button
+  - Aggregates attendance across all courses in a term
+
+#### Grade/Score Viewing
+- **`scraper/grade_parser.py`** - New parser for grade data
+  - `GradeItem` dataclass with fields: no, subject_code, subject_name, credits, mid_term, final, total, status, grade_4scale
+  - `TermGPA` dataclass for per-term GPA breakdown
+  - `GPASummary` dataclass with fields: term, term_gpa, cumulative_gpa, total_credits, earned_credits, subjects_passed, subjects_failed, grade_breakdown, by_term, excluded_subjects
+  - `GradeParser` class with methods: `extract_terms()`, `extract_courses()`, `parse_grades()`, `calculate_gpa()`, `format_for_discord()`
+  - 10-point to 4-point GPA scale conversion
+  - Automatic exclusion of non-GPA subjects (PE, MUSIC, ENG, EN)
+  - Cumulative GPA calculation across all recent terms
+
+- **`bot/commands/grade.py`** - New Discord slash commands
+  - `/grade view [term] [course]` - Interactive grade viewer with dropdown menus
+  - `/grade this-term` - Quick view grades for most recent term
+  - `/grade gpa` - Calculate cumulative GPA across all terms
+  - Interactive `GradeView` with term/course selectors and GPA calculation button
+  - Detailed grade breakdown with letter grades and 4.0 scale conversion
+
+#### Authentication Updates
+- **`scraper/auto_login_feid.py`** - Added new fetch methods
+  - `fetch_attendance(student_id, campus, term, course)` - Fetch attendance page from FAP
+  - `fetch_grades(student_id, term, course)` - Fetch grade page from FAP
+
+- **`scraper/auth.py`** - Added new wrapper methods with auto-refresh
+  - `fetch_attendance()` - Wrapper with session auto-refresh on failure
+  - `fetch_grades()` - Wrapper with session auto-refresh on failure
+
+#### Bot Configuration
+- **`bot/bot.py`** - Registered new command cogs
+  - Added `AttendanceCommands` cog
+  - Added `GradeCommands` cog
+
+### Changed
+
+- Environment Variables (add to `.env`):
+  - `FAP_STUDENT_ID` - Student ID for attendance/grade queries (e.g., SE203055)
+  - `FAP_CAMPUS` - Campus ID (default: 4 for FPTU-HCM)
+
+### URLs
+
+- **Attendance:** `https://fap.fpt.edu.vn/Report/ViewAttendstudent.aspx?id={student_id}&campus={campus}&term={term_id}&course={course_id}`
+- **Grades:** `https://fap.fpt.edu.vn/Grade/StudentGrade.aspx?rollNumber={student_id}&term={term_name}&course={course_id}`
+
+---
+
+## [2026-03-09] - Docs Reorganization
+
+### Changed
+
+- **Documentation Structure** - Reorganized into `docs/` folder
+  - `BOT_LOGIC.md` → `docs/DEVELOPMENT.md`
+  - `EXAM_FEATURE.md` → `docs/features/EXAM.md`
+  - `FAP-SOLUTION-ARCHITECTURE.md` → `docs/ARCHITECTURE.md`
+  - `FLARESOLVERR-GUIDE.md` → `docs/archive/FLARESOLVERR.md`
+- Updated README.md with new documentation section
+
+## [2026-03-09] - Exam Schedule & Session Management
 
 ### Added
 

@@ -11,6 +11,7 @@
 - ✅ **Auto-refresh session** - Tự động đăng nhập lại khi session hết hạn
 - ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP
 - ✅ **Cào lịch thi** - Parse lịch thi cuối kỳ
+- ✅ **Xem điểm số** - Parse bảng điểm học phần & tính GPA
 - ✅ **Lưu cookie** - Lưu authentication để tái sử dụng
 - ✅ **Chọn tuần** - Lấy lịch bất kỳ tuần nào
 - ✅ **Parse HTML** - Trích xuất thông tin lớp (phòng, thời gian, điểm danh)
@@ -120,12 +121,15 @@ fap-discord-bot/
 │   │   ├── session_validator.py← Session health check & auto-refresh
 │   │   ├── parser.py           ← HTML parser (schedule)
 │   │   ├── exam_parser.py      ← HTML parser (exam)
+│   │   ├── grade_parser.py     ← HTML parser (grade)
 │   │   └── cloudflare.py       ← Turnstile solver
 │   ├── bot/                    ← Discord bot
 │   │   ├── bot.py              ← Main bot class
 │   │   └── commands/
 │   │       ├── schedule.py     ← Lệnh lịch học
 │   │       ├── exam.py         ← Lệnh lịch thi
+│   │       ├── grade.py        ← Lệnh điểm số
+│   │       ├── attendance.py   ← Lệnh điểm danh
 │   │       └── status.py       ← Lệnh trạng thái
 │   └── utils/                  ← Utility functions
 │
@@ -233,6 +237,22 @@ class ExamItem:
     publication_date: str  # "09/03/2026"
 ```
 
+### GradeItem (Điểm số)
+
+```python
+@dataclass
+class GradeItem:
+    no: int                 # Số thứ tự
+    subject_code: str       # "MAD101"
+    subject_name: str       # "Discrete mathematics"
+    credits: int            # Số tín chỉ (3, 4...)
+    mid_term: float        # Điểm giữa kỳ (0-10)
+    final: float           # Điểm cuối kỳ (0-10)
+    total: float           # Điểm tổng kết (0-10)
+    status: str            # "Passed", "Is Suspended", "In Progress"
+    grade_4scale: float    # Điểm thang 4.0 (0-4)
+```
+
 ---
 
 ## 🗄️ Tham chiếu lệnh
@@ -280,6 +300,11 @@ python scraper/auto_login_feid.py fetch 5 2026
 /schedule week 5      - Xem lịch học tuần 5
 /exam schedule        - Xem lịch thi
 /exam upcoming        - Xem lịch thi 7 ngày tới
+/grade this-term      - Xem điểm học kỳ hiện tại (Dashboard)
+/grade view           - Xem chi tiết điểm theo kỳ
+/grade gpa            - Xem GPA tổng kết
+/attendance view      - Xem chi tiết điểm danh
+/attendance this-term - Xem điểm danh học kỳ này
 /status               - Kiểm tra trạng thái bot
 /ping                 - Ping bot
 ```
@@ -348,9 +373,12 @@ cat exam_schedule_final.html
 - [x] Session Auto-Refresh
 - [x] HTML Parser (Schedule)
 - [x] HTML Parser (Exam)
+- [x] HTML Parser (Grade)
 - [x] Cookie Persistence
 - [x] Discord Bot Commands (Schedule)
 - [x] Discord Bot Commands (Exam)
+- [x] Discord Bot Commands (Grade)
+- [x] Discord Bot Commands (Attendance)
 - [x] Concurrent Access Lock
 - [x] Week Selection
 - [ ] Keep-Alive Heartbeat
@@ -375,6 +403,7 @@ cat exam_schedule_final.html
 |----------|-------|
 | **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Kiến trúc chi tiết với flow diagram |
 | **[features/EXAM.md](docs/features/EXAM.md)** | Tài liệu tính năng Exam Schedule |
+| **[features/GRADE.md](docs/features/GRADE.md)** | Tài liệu tính năng Grade/Score |
 
 ### Tài liệu archive (đã cũ)
 
@@ -404,6 +433,6 @@ MIT License
 
 ---
 
-*Updated: 2026-03-09*
+*Updated: 2026-03-11*
 *Status: ✅ Production Ready*
-*Architecture: FeID + Playwright + Auto-Refresh*
+*Architecture: FeID + Playwright + Auto-Refresh + Grade/Attendance*

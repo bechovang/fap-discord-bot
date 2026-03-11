@@ -459,6 +459,186 @@ class FAPAutoLogin:
 
         return content
 
+    async def fetch_attendance(
+        self,
+        student_id: str = None,
+        campus: int = 4,
+        term: int = None,
+        course: int = None
+    ) -> str:
+        """Fetch attendance page using saved cookies
+
+        Args:
+            student_id: Student ID (e.g., SE203055)
+            campus: Campus ID (default: 4 for FPTU-HCM)
+            term: Term ID (e.g., 60 for Spring2026)
+            course: Course ID (e.g., 57599)
+
+        Returns:
+            HTML content or None if failed
+        """
+        ATTENDANCE_URL = "https://fap.fpt.edu.vn/Report/ViewAttendstudent.aspx"
+
+        # Check if cookies file exists
+        if not Path(self.COOKIES_FILE).exists():
+            print(f"[!] No cookies found. Run login first.")
+            return None
+
+        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
+        with open(self.COOKIES_FILE, 'r') as f:
+            cookies = json.load(f)
+
+        print(f"[+] Loaded {len(cookies)} cookies")
+
+        self._playwright = await async_playwright().start()
+
+        self._browser = await self._playwright.chromium.launch(
+            headless=self.headless,
+            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
+        )
+
+        self._page = await self._browser.new_page()
+        await self._page.context.add_cookies(cookies)
+        print("[.] Cookies added to browser context")
+
+        # Build URL with parameters
+        params = []
+        if student_id:
+            params.append(f"id={student_id}")
+        if campus:
+            params.append(f"campus={campus}")
+        if term:
+            params.append(f"term={term}")
+        if course:
+            params.append(f"course={course}")
+
+        url = ATTENDANCE_URL
+        if params:
+            url += "?" + "&".join(params)
+
+        print(f"[.] Navigating to attendance page...")
+        print(f"[.] URL: {url}")
+        await self._page.goto(url, timeout=60000)
+        await asyncio.sleep(5)
+
+        # Check if redirected to login
+        current_url = self._page.url
+        content = await self._page.content()
+
+        if 'Login' in current_url or 'Default.aspx' in current_url:
+            print("[.] Not on attendance page, navigating to home...")
+            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
+            await asyncio.sleep(3)
+            await self._page.goto(url, timeout=30000)
+            await asyncio.sleep(5)
+            content = await self._page.content()
+
+        # Check if we have attendance content
+        if 'ViewAttendstudent' not in current_url and 'divTerm' not in content:
+            print("[!] Attendance page not loaded. Saving debug page...")
+            with open('debug_attendance_fetch.html', 'w', encoding='utf-8') as f:
+                f.write(content)
+            print("[.] Saved to debug_attendance_fetch.html")
+
+            await self._browser.close()
+            await self._playwright.stop()
+            return None
+
+        print("[.] Attendance page loaded successfully")
+
+        await self._browser.close()
+        await self._playwright.stop()
+
+        return content
+
+    async def fetch_grades(
+        self,
+        student_id: str = None,
+        term: str = None,
+        course: int = None
+    ) -> str:
+        """Fetch grade page using saved cookies
+
+        Args:
+            student_id: Student ID (e.g., SE203055)
+            term: Term NAME (e.g., Fall2025, Spring2026)
+            course: Course ID (e.g., 55959)
+
+        Returns:
+            HTML content or None if failed
+        """
+        GRADE_URL = "https://fap.fpt.edu.vn/Grade/StudentGrade.aspx"
+
+        # Check if cookies file exists
+        if not Path(self.COOKIES_FILE).exists():
+            print(f"[!] No cookies found. Run login first.")
+            return None
+
+        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
+        with open(self.COOKIES_FILE, 'r') as f:
+            cookies = json.load(f)
+
+        print(f"[+] Loaded {len(cookies)} cookies")
+
+        self._playwright = await async_playwright().start()
+
+        self._browser = await self._playwright.chromium.launch(
+            headless=self.headless,
+            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
+        )
+
+        self._page = await self._browser.new_page()
+        await self._page.context.add_cookies(cookies)
+        print("[.] Cookies added to browser context")
+
+        # Build URL with parameters
+        params = []
+        if student_id:
+            params.append(f"rollNumber={student_id}")
+        if term:
+            params.append(f"term={term}")
+        if course:
+            params.append(f"course={course}")
+
+        url = GRADE_URL
+        if params:
+            url += "?" + "&".join(params)
+
+        print(f"[.] Navigating to grade page...")
+        print(f"[.] URL: {url}")
+        await self._page.goto(url, timeout=60000)
+        await asyncio.sleep(5)
+
+        # Check if redirected to login
+        current_url = self._page.url
+        content = await self._page.content()
+
+        if 'Login' in current_url or 'Default.aspx' in current_url:
+            print("[.] Not on grade page, navigating to home...")
+            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
+            await asyncio.sleep(3)
+            await self._page.goto(url, timeout=30000)
+            await asyncio.sleep(5)
+            content = await self._page.content()
+
+        # Check if we have grade content
+        if 'StudentGrade' not in current_url and 'divTerm' not in content:
+            print("[!] Grade page not loaded. Saving debug page...")
+            with open('debug_grade_fetch.html', 'w', encoding='utf-8') as f:
+                f.write(content)
+            print("[.] Saved to debug_grade_fetch.html")
+
+            await self._browser.close()
+            await self._playwright.stop()
+            return None
+
+        print("[.] Grade page loaded successfully")
+
+        await self._browser.close()
+        await self._playwright.stop()
+
+        return content
+
 
 # Convenience functions
 async def login(feid: str, password: str):

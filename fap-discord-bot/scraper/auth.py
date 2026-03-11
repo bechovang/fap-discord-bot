@@ -198,6 +198,92 @@ class FAPAuth:
 
             return html
 
+    async def fetch_attendance(
+        self,
+        student_id: str = None,
+        campus: int = 4,
+        term: int = None,
+        course: int = None
+    ) -> Optional[str]:
+        """
+        Fetch attendance HTML with auto-refresh on failure
+
+        Args:
+            student_id: Student ID (e.g., SE203055)
+            campus: Campus ID (default: 4 for FPTU-HCM)
+            term: Term ID (e.g., 60 for Spring2026)
+            course: Course ID (e.g., 57599)
+
+        Returns:
+            HTML content or None if failed
+        """
+        async with _auth_lock:  # Prevent concurrent Chrome access
+            await self._ensure_auth()
+
+            # Try fetch first
+            html = await self._auth.fetch_attendance(
+                student_id=student_id,
+                campus=campus,
+                term=term,
+                course=course
+            )
+
+            # If failed and auto-refresh enabled, refresh and retry
+            if not html and self.auto_refresh:
+                if await self._refresh_session_once():
+                    logger.info("✅ Session refreshed - retrying fetch...")
+                    html = await self._auth.fetch_attendance(
+                        student_id=student_id,
+                        campus=campus,
+                        term=term,
+                        course=course
+                    )
+                else:
+                    logger.error("❌ Fetch failed after refresh")
+
+            return html
+
+    async def fetch_grades(
+        self,
+        student_id: str = None,
+        term: str = None,
+        course: int = None
+    ) -> Optional[str]:
+        """
+        Fetch grade HTML with auto-refresh on failure
+
+        Args:
+            student_id: Student ID (e.g., SE203055)
+            term: Term NAME (e.g., Fall2025, Spring2026)
+            course: Course ID (e.g., 55959)
+
+        Returns:
+            HTML content or None if failed
+        """
+        async with _auth_lock:  # Prevent concurrent Chrome access
+            await self._ensure_auth()
+
+            # Try fetch first
+            html = await self._auth.fetch_grades(
+                student_id=student_id,
+                term=term,
+                course=course
+            )
+
+            # If failed and auto-refresh enabled, refresh and retry
+            if not html and self.auto_refresh:
+                if await self._refresh_session_once():
+                    logger.info("✅ Session refreshed - retrying fetch...")
+                    html = await self._auth.fetch_grades(
+                        student_id=student_id,
+                        term=term,
+                        course=course
+                    )
+                else:
+                    logger.error("❌ Fetch failed after refresh")
+
+            return html
+
     async def close(self):
         """Close browser and cleanup"""
         # FAPAutoLogin creates/closes browser per fetch call

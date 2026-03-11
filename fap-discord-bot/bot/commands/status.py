@@ -40,15 +40,11 @@ class StatusCommands(commands.Cog):
             fap_user = os.getenv('FAP_USERNAME', 'Not configured')
 
             # Session status
-            session_status = "❌ Not connected"
-            if self.auth_instance and self.auth_instance._is_logged_in:
-                if self.auth_instance._session_expiry:
-                    if datetime.now() < self.auth_instance._session_expiry:
-                        session_status = f"✅ Active (expires in {(self.auth_instance._session_expiry - datetime.now()).seconds // 60} min)"
-                    else:
-                        session_status = "⚠️ Expired"
-                else:
-                    session_status = "✅ Active"
+            session_status = "✅ Ready (auto-refresh enabled)"
+            if not self.auth_instance:
+                session_status = "⚠️ Auth not initialized"
+            elif not self.auth_instance.username:
+                session_status = "⚠️ FAP credentials not configured"
 
             embed = discord.Embed(
                 title="🤖 FAP Bot Status",
