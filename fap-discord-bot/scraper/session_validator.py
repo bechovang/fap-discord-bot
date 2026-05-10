@@ -2,6 +2,7 @@
 Session Validator - Check and auto-refresh FAP session
 """
 import os
+import json
 import logging
 import asyncio
 from pathlib import Path
@@ -55,36 +56,33 @@ class SessionValidator:
         if fast_check:
             return self.is_session_fresh(max_age_hours=2)
 
-        # Full check: launch browser and verify access
+        # Full check: use aiohttp to verify session cookies work
         try:
-            # Kill Chrome processes first to avoid profile lock
-            import subprocess
-            try:
-                subprocess.run(['taskkill', '/F', '/IM', 'chrome.exe', '/T'],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                await asyncio.sleep(1)
-            except:
-                pass
+            import aiohttp
+            cookies_file = self.data_dir / "fap_cookies.json"
+            with open(cookies_file, 'r') as f:
+                cookies_list = json.load(f)
+            cookies = {c['name']: c['value'] for c in cookies_list if 'fpt.edu.vn' in c.get('domain', '')}
 
-            async with async_playwright() as p:
-                browser = await p.chromium.launch_persistent_context(
-                    user_data_dir=str(self.profile_dir),
-                    headless=True
-                )
+            if not cookies:
+                return False
 
-                page = browser.pages[0] if browser.pages else await browser.new_page()
-
-                # Try to access schedule page (lightweight check)
-                await page.goto("https://fap.fpt.edu.vn/Report/ScheduleOfWeek.aspx", timeout=30000)
-                await asyncio.sleep(3)
-
-                content = await page.content()
-
-                # Check if we're logged in
-                is_valid = 'ctl00_mainContent_drpSelectWeek' in content
-
-                await browser.close()
-                return is_valid
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            }
+            async with aiohttp.ClientSession(
+                cookies=cookies,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as session:
+                async with session.get(
+                    "https://fap.fpt.edu.vn/Report/ScheduleOfWeek.aspx",
+                    allow_redirects=True,
+                ) as resp:
+                    if resp.status != 200:
+                        return False
+                    content = await resp.text()
+                    return 'ctl00_mainContent_drpSelectWeek' in content
 
         except Exception as e:
             logger.error(f"Session health check error: {e}")
@@ -104,22 +102,25 @@ class SessionValidator:
             logger.error("Cannot refresh - missing credentials")
             return False
 
-        logger.info("🔄 Refreshing FAP session...")
+        logger.info("Refreshing FAP session...")
 
         try:
             use_headless = headless if headless is not None else os.getenv("HEADLESS", "false").lower() == "true"
             auth = FAPAutoLogin(headless=use_headless, feid=self.feid, password=self.password)
-            success = await auth.auto_login()
+            success = await asyncio.wait_for(auth.auto_login(), timeout=120)
 
             if success:
-                logger.info("✅ Session refreshed successfully")
+                logger.info("Session refreshed successfully")
                 return True
 
             logger.warning("Playwright refresh failed, trying FlareSolverr fallback...")
             return await self._refresh_with_flaresolverr()
 
+        except asyncio.TimeoutError:
+            logger.error("Session refresh timed out after 120s")
+            return await self._refresh_with_flaresolverr()
         except Exception as e:
-            logger.error(f"❌ Session refresh error: {e}")
+            logger.error(f"Session refresh error: {e}")
             logger.warning("Trying FlareSolverr fallback after Playwright refresh error...")
             return await self._refresh_with_flaresolverr()
 

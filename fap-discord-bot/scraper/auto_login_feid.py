@@ -5,8 +5,12 @@ Automates the full login flow: Cloudflare bypass → FeID login → Schedule
 import asyncio
 import os
 import json
+import logging
 from pathlib import Path
 from playwright.async_api import async_playwright
+import aiohttp
+
+logger = logging.getLogger(__name__)
 
 
 class FAPAutoLogin:
@@ -299,165 +303,87 @@ class FAPAutoLogin:
                 await submit_btn.first.click()
                 print("[.] Login form submitted...")
 
-    async def fetch_schedule(self, week: int = None, year: int = None) -> str:
-        """Fetch schedule using saved cookies"""
-        # Check if cookies file exists
+    def _load_cookies_dict(self) -> dict:
+        """Load cookies from JSON file into a {name: value} dict for aiohttp"""
         if not Path(self.COOKIES_FILE).exists():
-            print(f"[!] No cookies found. Run login first.")
-            return None
-
-        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
+            return {}
         with open(self.COOKIES_FILE, 'r') as f:
             cookies = json.load(f)
+        return {c['name']: c['value'] for c in cookies if 'fpt.edu.vn' in c.get('domain', '') or 'fap' in c.get('domain', '')}
 
-        print(f"[+] Loaded {len(cookies)} cookies")
-
-        self._playwright = await async_playwright().start()
-
-        # Launch browser WITHOUT persistent context, then add cookies
-        self._browser = await self._playwright.chromium.launch(
-            headless=self.headless,
-            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
-        )
-
-        self._page = await self._browser.new_page()
-
-        # Add cookies to the browser context
-        await self._page.context.add_cookies(cookies)
-        print("[.] Cookies added to browser context")
-
-        print("[.] Navigating to schedule page...")
-        await self._page.goto(self.SCHEDULE_URL, timeout=60000)
-        await asyncio.sleep(5)
-
-        # Check current page
-        current_url = self._page.url
-        content = await self._page.content()
-        print(f"[.] Current URL: {current_url}")
-
-        # If on login page, try to navigate home first
-        if 'Login' in current_url or 'Default.aspx' in current_url:
-            print("[.] Not on schedule page, navigating to home...")
-            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
-            await asyncio.sleep(3)
-
-            # Try schedule page again
-            await self._page.goto(self.SCHEDULE_URL, timeout=30000)
-            await asyncio.sleep(5)
-            content = await self._page.content()
-
-        # Check if we have schedule dropdown
-        if 'ctl00_mainContent_drpSelectWeek' not in content:
-            print("[!] Schedule page not loaded. Saving debug page...")
-            with open('debug_fetch_page.html', 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("[.] Saved to debug_fetch_page.html")
-
-            await self._browser.close()
-            await self._playwright.stop()
+    async def _http_get(self, url: str, timeout: int = 30) -> str:
+        """Fetch URL using aiohttp with saved cookies (non-blocking)"""
+        cookies = self._load_cookies_dict()
+        if not cookies:
+            logger.warning("No FAP cookies found")
             return None
 
-        # Select week if specified - select_option triggers postback automatically
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        }
+
+        try:
+            async with aiohttp.ClientSession(
+                cookies=cookies,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as session:
+                async with session.get(url, allow_redirects=True) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"HTTP {resp.status} for {url}")
+                        return None
+
+                    content = await resp.text()
+
+                    # Check if redirected to login
+                    final_url = str(resp.url)
+                    if 'Login' in final_url or 'Default.aspx' in final_url:
+                        logger.warning(f"Redirected to login page: {final_url}")
+                        return None
+
+                    return content
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout fetching {url}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching {url}: {e}")
+            return None
+
+    async def fetch_schedule(self, week: int = None, year: int = None) -> str:
+        """Fetch schedule using aiohttp with saved cookies"""
+        url = self.SCHEDULE_URL
+        params = []
         if week is not None:
-            print(f"[.] Selecting week: {week}")
-            try:
-                await self._page.select_option('#ctl00_mainContent_drpSelectWeek', str(week))
-                # Wait for navigation after postback
-                await self._page.wait_for_load_state('networkidle', timeout=10000)
-                await asyncio.sleep(3)
-                print("[.] Week selection completed")
-            except Exception as e:
-                print(f"[.] Week selection failed: {e}")
-
+            params.append(f"week={week}")
         if year is not None:
-            print(f"[.] Selecting year: {year}")
-            try:
-                await self._page.select_option('#ctl00_mainContent_drpYear', str(year))
-                # Wait for navigation after postback
-                await self._page.wait_for_load_state('networkidle', timeout=10000)
-                await asyncio.sleep(3)
-                print("[.] Year selection completed")
-            except Exception as e:
-                print(f"[.] Year selection failed: {e}")
+            params.append(f"year={year}")
+        if params:
+            url += "?" + "&".join(params)
 
-        await asyncio.sleep(3)
-        content = await self._page.content()
+        logger.info(f"Fetching schedule: {url}")
+        content = await self._http_get(url)
 
-        # Save for debugging
-        with open('schedule_fetched.html', 'w', encoding='utf-8') as f:
-            f.write(content)
+        if content and 'ctl00_mainContent_drpSelectWeek' in content:
+            logger.info("Schedule page loaded successfully")
+            return content
 
-        await self._browser.close()
-        await self._playwright.stop()
-
-        return content
+        logger.warning("Schedule page not loaded or session expired")
+        return content if content and len(content) > 500 else None
 
     async def fetch_exam_schedule(self) -> str:
-        """Fetch exam schedule using saved cookies"""
+        """Fetch exam schedule using aiohttp with saved cookies"""
         EXAM_URL = "https://fap.fpt.edu.vn/Exam/ScheduleExams.aspx"
 
-        # Check if cookies file exists
-        if not Path(self.COOKIES_FILE).exists():
-            print(f"[!] No cookies found. Run login first.")
-            return None
+        logger.info("Fetching exam schedule")
+        content = await self._http_get(EXAM_URL)
 
-        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
-        with open(self.COOKIES_FILE, 'r') as f:
-            cookies = json.load(f)
+        if content and ('Schedule Exam' in content or 'table' in content.lower()):
+            logger.info("Exam schedule page loaded successfully")
+            return content
 
-        print(f"[+] Loaded {len(cookies)} cookies")
-
-        self._playwright = await async_playwright().start()
-
-        # Launch browser WITHOUT persistent context, then add cookies
-        self._browser = await self._playwright.chromium.launch(
-            headless=self.headless,
-            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
-        )
-
-        self._page = await self._browser.new_page()
-
-        # Add cookies to the browser context
-        await self._page.context.add_cookies(cookies)
-        print("[.] Cookies added to browser context")
-
-        print("[.] Navigating to exam schedule page...")
-        await self._page.goto(EXAM_URL, timeout=60000)
-        await asyncio.sleep(5)
-
-        # Check current page
-        current_url = self._page.url
-        content = await self._page.content()
-        print(f"[.] Current URL: {current_url}")
-
-        # If on login page, try to navigate home first
-        if 'Login' in current_url or 'Default.aspx' in current_url:
-            print("[.] Not on exam page, navigating to home...")
-            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
-            await asyncio.sleep(3)
-
-            # Try exam page again
-            await self._page.goto(EXAM_URL, timeout=30000)
-            await asyncio.sleep(5)
-            content = await self._page.content()
-
-        # Check if we have exam schedule content
-        if 'Schedule Exam' not in content and 'table' not in content.lower():
-            print("[!] Exam page not loaded. Saving debug page...")
-            with open('debug_exam_fetch_page.html', 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("[.] Saved to debug_exam_fetch_page.html")
-
-            await self._browser.close()
-            await self._playwright.stop()
-            return None
-
-        print("[.] Exam schedule page loaded successfully")
-
-        await self._browser.close()
-        await self._playwright.stop()
-
-        return content
+        logger.warning("Exam page not loaded or session expired")
+        return content if content and len(content) > 500 else None
 
     async def fetch_attendance(
         self,
@@ -466,42 +392,9 @@ class FAPAutoLogin:
         term: int = None,
         course: int = None
     ) -> str:
-        """Fetch attendance page using saved cookies
-
-        Args:
-            student_id: Student ID (e.g., SE203055)
-            campus: Campus ID (default: 4 for FPTU-HCM)
-            term: Term ID (e.g., 60 for Spring2026)
-            course: Course ID (e.g., 57599)
-
-        Returns:
-            HTML content or None if failed
-        """
+        """Fetch attendance using aiohttp with saved cookies"""
         ATTENDANCE_URL = "https://fap.fpt.edu.vn/Report/ViewAttendstudent.aspx"
 
-        # Check if cookies file exists
-        if not Path(self.COOKIES_FILE).exists():
-            print(f"[!] No cookies found. Run login first.")
-            return None
-
-        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
-        with open(self.COOKIES_FILE, 'r') as f:
-            cookies = json.load(f)
-
-        print(f"[+] Loaded {len(cookies)} cookies")
-
-        self._playwright = await async_playwright().start()
-
-        self._browser = await self._playwright.chromium.launch(
-            headless=self.headless,
-            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
-        )
-
-        self._page = await self._browser.new_page()
-        await self._page.context.add_cookies(cookies)
-        print("[.] Cookies added to browser context")
-
-        # Build URL with parameters
         params = []
         if student_id:
             params.append(f"id={student_id}")
@@ -516,40 +409,15 @@ class FAPAutoLogin:
         if params:
             url += "?" + "&".join(params)
 
-        print(f"[.] Navigating to attendance page...")
-        print(f"[.] URL: {url}")
-        await self._page.goto(url, timeout=60000)
-        await asyncio.sleep(5)
+        logger.info(f"Fetching attendance: {url}")
+        content = await self._http_get(url)
 
-        # Check if redirected to login
-        current_url = self._page.url
-        content = await self._page.content()
+        if content and ('ViewAttendstudent' in content or 'divTerm' in content):
+            logger.info("Attendance page loaded successfully")
+            return content
 
-        if 'Login' in current_url or 'Default.aspx' in current_url:
-            print("[.] Not on attendance page, navigating to home...")
-            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
-            await asyncio.sleep(3)
-            await self._page.goto(url, timeout=30000)
-            await asyncio.sleep(5)
-            content = await self._page.content()
-
-        # Check if we have attendance content
-        if 'ViewAttendstudent' not in current_url and 'divTerm' not in content:
-            print("[!] Attendance page not loaded. Saving debug page...")
-            with open('debug_attendance_fetch.html', 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("[.] Saved to debug_attendance_fetch.html")
-
-            await self._browser.close()
-            await self._playwright.stop()
-            return None
-
-        print("[.] Attendance page loaded successfully")
-
-        await self._browser.close()
-        await self._playwright.stop()
-
-        return content
+        logger.warning("Attendance page not loaded or session expired")
+        return content if content and len(content) > 500 else None
 
     async def fetch_grades(
         self,
@@ -557,41 +425,9 @@ class FAPAutoLogin:
         term: str = None,
         course: int = None
     ) -> str:
-        """Fetch grade page using saved cookies
-
-        Args:
-            student_id: Student ID (e.g., SE203055)
-            term: Term NAME (e.g., Fall2025, Spring2026)
-            course: Course ID (e.g., 55959)
-
-        Returns:
-            HTML content or None if failed
-        """
+        """Fetch grades using aiohttp with saved cookies"""
         GRADE_URL = "https://fap.fpt.edu.vn/Grade/StudentGrade.aspx"
 
-        # Check if cookies file exists
-        if not Path(self.COOKIES_FILE).exists():
-            print(f"[!] No cookies found. Run login first.")
-            return None
-
-        print(f"[.] Loading cookies from {self.COOKIES_FILE}...")
-        with open(self.COOKIES_FILE, 'r') as f:
-            cookies = json.load(f)
-
-        print(f"[+] Loaded {len(cookies)} cookies")
-
-        self._playwright = await async_playwright().start()
-
-        self._browser = await self._playwright.chromium.launch(
-            headless=self.headless,
-            args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
-        )
-
-        self._page = await self._browser.new_page()
-        await self._page.context.add_cookies(cookies)
-        print("[.] Cookies added to browser context")
-
-        # Build URL with parameters
         params = []
         if student_id:
             params.append(f"rollNumber={student_id}")
@@ -604,40 +440,15 @@ class FAPAutoLogin:
         if params:
             url += "?" + "&".join(params)
 
-        print(f"[.] Navigating to grade page...")
-        print(f"[.] URL: {url}")
-        await self._page.goto(url, timeout=60000)
-        await asyncio.sleep(5)
+        logger.info(f"Fetching grades: {url}")
+        content = await self._http_get(url)
 
-        # Check if redirected to login
-        current_url = self._page.url
-        content = await self._page.content()
+        if content and ('StudentGrade' in content or 'divTerm' in content):
+            logger.info("Grade page loaded successfully")
+            return content
 
-        if 'Login' in current_url or 'Default.aspx' in current_url:
-            print("[.] Not on grade page, navigating to home...")
-            await self._page.goto("https://fap.fpt.edu.vn/Default.aspx", timeout=30000)
-            await asyncio.sleep(3)
-            await self._page.goto(url, timeout=30000)
-            await asyncio.sleep(5)
-            content = await self._page.content()
-
-        # Check if we have grade content
-        if 'StudentGrade' not in current_url and 'divTerm' not in content:
-            print("[!] Grade page not loaded. Saving debug page...")
-            with open('debug_grade_fetch.html', 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("[.] Saved to debug_grade_fetch.html")
-
-            await self._browser.close()
-            await self._playwright.stop()
-            return None
-
-        print("[.] Grade page loaded successfully")
-
-        await self._browser.close()
-        await self._playwright.stop()
-
-        return content
+        logger.warning("Grade page not loaded or session expired")
+        return content if content and len(content) > 500 else None
 
 
 # Convenience functions
