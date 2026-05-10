@@ -90,7 +90,7 @@ class SessionValidator:
             logger.error(f"Session health check error: {e}")
             return False
 
-    async def refresh_session(self, headless: bool = False) -> bool:
+    async def refresh_session(self, headless: bool = None) -> bool:
         """
         Refresh session by re-login
 
@@ -107,7 +107,8 @@ class SessionValidator:
         logger.info("🔄 Refreshing FAP session...")
 
         try:
-            auth = FAPAutoLogin(headless=headless, feid=self.feid, password=self.password)
+            use_headless = headless if headless is not None else os.getenv("HEADLESS", "false").lower() == "true"
+            auth = FAPAutoLogin(headless=use_headless, feid=self.feid, password=self.password)
             success = await auth.auto_login()
 
             if success:
@@ -174,7 +175,7 @@ class SessionValidator:
                 logger.warning("⚠️ Session expired, refreshing...")
 
         # Need to refresh or login
-        return await self.refresh_session(headless=False)
+        return await self.refresh_session()
 
 
 # Convenience function
@@ -206,7 +207,7 @@ if __name__ == "__main__":
             print(f"Session valid: {is_valid}")
 
         elif action == "refresh":
-            success = await validator.refresh_session(headless=False)
+            success = await validator.refresh_session()
             print(f"Refresh success: {success}")
 
         elif action == "ensure":
