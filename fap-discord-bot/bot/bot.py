@@ -19,6 +19,7 @@ from bot.commands.status import setup as setup_status, StatusCommands
 from bot.commands.exam import setup as setup_exam
 from bot.commands.attendance import setup as setup_attendance
 from bot.commands.grade import setup as setup_grade
+# from bot.commands.pending_checks import setup as setup_pending_checks  # TODO: Conflicting commands - needs refactoring
 
 # Configure logging
 logging.basicConfig(
@@ -73,12 +74,24 @@ class FAPBot(commands.Bot):
             data_dir='data'
         )
 
+        # Validate the FAP session at startup so the bot can auto-login or
+        # refresh immediately when cookies are missing or expired.
+        if fap_user and fap_pass:
+            session = await self.auth.get_session(force_refresh=False, fast_check=False)
+            if session:
+                logger.info("FAP session is ready")
+            else:
+                logger.warning("FAP session could not be initialized at startup")
+        else:
+            logger.warning("Skipping FAP session initialization because credentials are missing")
+
         # Load cogs
         await setup_schedule(self)
         await setup_status(self)
         await setup_exam(self)
         await setup_attendance(self)
         await setup_grade(self)
+        # await setup_pending_checks(self)  # TODO: Conflicting commands - needs refactoring
 
         # Set auth reference in status cog
         self.status_cog = self.get_cog('StatusCommands')
@@ -112,9 +125,6 @@ class FAPBot(commands.Bot):
                         logger.info(f"    - /{cmd.name} {subcmd.name}")
         except Exception as e:
             logger.error(f"Failed to sync commands: {e}")
-
-        # Note: FAP session will be validated on first command use
-        # No need to check at startup - keeps bot fast
 
     async def on_guild_join(self, guild):
         """Called when bot joins a guild"""

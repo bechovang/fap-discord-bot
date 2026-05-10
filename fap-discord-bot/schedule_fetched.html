@@ -1,0 +1,380 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="X-UA-Compatible" content="IE=Edge"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>
+	View Schedule
+</title><link rel="Stylesheet" href="../fu.css" type="text/css"><link rel="Stylesheet" href="../JavaScript/jquery.css" type="text/css"><link rel="Stylesheet" href="../JavaScript/jquery-ui.css" type="text/css"><link rel="Stylesheet" href="../JavaScript/jquery.alerts.css" type="text/css">
+    
+    
+    
+
+    <script type="text/javascript" async="" src="https://ssl.google-analytics.com/ga.js"></script><script src="../JavaScript/jquery_002.js" type="text/javascript"></script>
+
+    <script src="../JavaScript/jquery_003.js" type="text/javascript"></script>
+
+    <script src="../JavaScript/jquery.js" type="text/javascript"></script>
+
+    <script src="../JavaScript/jquery-1.8.3.js" type="text/javascript"></script>
+    
+
+    <script src="../JavaScript/jquery-ui.js" type="text/javascript"></script>
+
+    <script src="../JavaScript/jquery.alerts.js" type="text/javascript"></script>
+    
+    <link rel="Stylesheet" href="../Content/bootstrap.css" type="text/css"><link rel="Stylesheet" href="../Content/bootstrap.min.css" type="text/css"><link rel="Stylesheet" href="../Content/bootstrap-theme.min.css" type="text/css">
+
+    <style type="text/css">
+        .style1 {
+            font-weight: bold;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div class="container">
+
+        <div class="row">
+            
+            <div class="col-md-6">
+
+                <h1><span>FPT University Academic Portal</span>
+                </h1>
+
+            </div>
+            <div class="col-md-6">
+                <div class="col-md-12">
+                    <table>
+                        <tbody><tr>
+                          
+
+                            <td colspan="2" class="auto-style1"><strong>FAP mobile app (myFAP) is ready at</strong></td>
+                            <td class="auto-style1;">Hỗ trợ kỹ thuật FAP</td>
+                        </tr>
+                        <tr>
+                         
+                            <td><a href="https://apps.apple.com/app/id1527723314">
+                                <img src="https://fap.fpt.edu.vn/images/app-store.png" style="width: 120px; height: 40px" alt="apple store"></a></td>
+                            <td><a href="https://play.google.com/store/apps/details?id=com.fuct">
+                                <img src="https://fap.fpt.edu.vn/images/play-store.png" style="width: 120px; height: 40px" alt="google store"></a></td>
+                            <td><img src="images/qrcodeFU.jpg" style="text-align: right"></td>
+                        </tr>
+                    </tbody></table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <form name="aspnetForm" method="post" action="./ScheduleOfWeek.aspx" id="aspnetForm">
+<div>
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="">
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="">
+<input type="hidden" name="__LASTFOCUS" id="__LASTFOCUS" value="">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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">
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['aspnetForm'];
+if (!theForm) {
+    theForm = document.aspnetForm;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div>
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="D5FDD5A8">
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="AAAJBpgwZGZZ7kQRWUnExUU8nloyKs3ln6ReB4yYgsBz5Q+whZ3oijf/Eb657BOhRokNulYxbnfqq5mXwFVB8audvFWGwhQm27Hwm053j+JP5v87Gc7xxSgbSchXp72ps2RYFFT9ZihEyUireJSvwyGBhvxlGF3xSmYBSDSSBbcPCV8jH9tpct4b5sjvJtQWeZ96R6hE5JC47d0WVY1n8VleYy7khI8SBvnE0orujsO9PxMz6b5g19GROqQQ1Y5YtCwh8OSthwVTvehg9Ge6PQLFRekk6JPsjyC3tOCkIPbKo0G8md0CG/4i6sGY6wbOw0lLnc/wqYjoUgYu598JZwH7TJQcPl50PKtRXfV9mlIbod1PffdWT2eG++M0HzotbMAnalotJ7FfLRKIjaZGvu5OzX7/fL7B0OFz4VYGLoIGY7b7qfau1BZ6STN6HPelCX3UoYyV8/uA0bIzM+OpAbxIUO+IZEZTRNDxRjJVaEJPWX2TXsgU2MBcbXjx+iXOwBiAIlnxtguIAen30V97igkw5wP39f8H3kjhIiQ40Y0EDX0HnyDyPKNve4AxcAxmUCqJcniKmHwZwPwzNvZ5SdVvlkhb3PV7jrK2Y/0+YB1ojiD2J2Q+T71DccpnSpc6JVRWB/n1V98sRqxybe00qdIbteww6fWGJsEAL5AL3ByzDvAvZEL11wCpG3AbjpU6nbmI4fBGt+SRZOjWume3zFsQCTBVNDdIbP/GRVWzrI2Z7Ok8gM5R0JTFHeQHR0PnIR01NFU1krsixsqUKXlkeemEyY923Ar61VxMEX78qDFJm5KP5BSV7LgfYbiXBSEJtc/4jPjJ0cuaYdNlCA2smJXl2XScU5IjLgk4sYjemC37EyvL0Zd9wAz7YnNc+MuzRcL6MmNF/f93riTdnbbIQcsUlgJcxlKf8RMI2J31mtC6pDIaUzTNwgn9esZkU7j2r0yYHYFoNYvDqxMdyLrkZ25E1Q4R+TdYQrz6xmbfDheYgLxeVWJuNBVVwJyeAD7TLS9gHwDVO4WVDU8s8Qr6TAhRZfqYAQEJMfc0sCaSZ+e0dHRDoVWTNa7kp+mZelRVb2V1/6o7Z0PqfOcZ0MUnvEQNHRdq+A03/vGngVuMHoOa4WBNeT88c9xakkmDQ8rhbOvC8UBGpbAhHisqHxnNTEc7mlxc4px/4VRO+uWGCWFcPdrDbDPUdppY5t24R5baKiTzBxbBtOErTHEh1C+cjRnjTfwCMrT6iaVmfhv1xF2a4PbIluaG9IgsQXYjW7LZBe45Dop+TZFGlTL4Nzi3oSbGSK1KWld77q6vBMfoGvtCaIa/nl8eqHMr09xiHPCVwVxa6nGdiOetiROIObDdrw==">
+</div>
+                    <div id="ctl00_divUser" style="float: right; margin-right: 16px;">
+                        <a href="?view=user">
+                            <span id="ctl00_lblLogIn" class="label label-success">phuchcm2006@gmail.com</span></a> | <a href="?logout=true" class="label label-success">logout</a> |
+                <span id="ctl00_lblCampusName" class="label label-success"> CAMPUS: FPTU-Hồ Chí Minh</span>
+                    </div>
+
+                    <div style="position: absolute; top: -35px; right: 30px; width: 150px;">
+                        
+                    </div>
+                    <ol class="breadcrumb">
+                        <li>
+                            <span id="ctl00_lblNavigation"><a href="../Student.aspx">Home</a>&nbsp;|&nbsp;<b>View Schedule</b></span></li>
+                    </ol>
+                    <table>
+                        <tbody><tr style="border-bottom: 0 none">
+                            <td>
+                                <div>
+                                    
+    <style>
+        div.online-indicator {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+  
+            background-color: #0fcc45;
+            border-radius: 50%;
+  
+            position: relative;
+        }
+        span.blink {
+            display: block;
+            width: 15px;
+            height: 15px;
+  
+            background-color: #0fcc45;
+            opacity: 0.7;
+            border-radius: 50%;
+  
+            animation: blink 1s linear infinite;
+        }
+
+        h3.online-text {
+            display: inline;
+  
+            font-family: 'Rubik', sans-serif;
+            font-weight: 400;
+            text-shadow: 0px 3px 6px rgba(150, 150, 150, 0.2);
+  
+            position: relative;
+            cursor: pointer;
+        }
+
+        /*Animations*/
+
+        @keyframes blink {
+            100% { transform: scale(2, 2); 
+                opacity: 0;
+            }
+        }
+        .auto-style1 {
+            color: #FF3300;
+        }
+        .auto-style2 {
+            color: #FF3300;
+            font-size: 14pt;
+        }
+    </style>
+    <h2>Activities for
+        <span id="ctl00_mainContent_lblStudent">PhucNNSE203055 (Nguyễn Ngọc Phúc)</span></h2>
+    <p>
+        <b>Note</b>: These activities do not include extra-curriculum activities, such as
+        club activities ...
+    </p>
+    <p>
+        <b>Chú thích</b>: Các hoạt động trong bảng dưới không bao gồm hoạt động ngoại khóa,
+        ví dụ như hoạt động câu lạc bộ ...
+    </p>
+    
+    
+    <div id="ctl00_mainContent_ghichuHCM">
+        <p class="auto-style2">
+          <b> Các phòng bắt đầu bằng NVH học tại nhà văn hóa Sinh viên, khu Đại học quốc gia</b> <br>
+
+
+        </p>
+    </div>
+    <div id="ctl00_mainContent_divNameDay"></div><div id="ctl00_mainContent_divShowDate"></div><div id="ctl00_mainContent_divContent"></div><table>
+        <thead>
+            <tr>
+
+                <th rowspan="2">
+                    <span class="auto-style1"><strong>Year</strong></span>
+                    <select name="ctl00$mainContent$drpYear" onchange="javascript:setTimeout('__doPostBack(\'ctl00$mainContent$drpYear\',\'\')', 0)" id="ctl00_mainContent_drpYear">
+	<option value="2023">2023</option>
+	<option value="2024">2024</option>
+	<option value="2025">2025</option>
+	<option selected="selected" value="2026">2026</option>
+	<option value="2027">2027</option>
+
+</select>
+                    <br>
+                    Week
+                    <select name="ctl00$mainContent$drpSelectWeek" onchange="javascript:setTimeout('__doPostBack(\'ctl00$mainContent$drpSelectWeek\',\'\')', 0)" id="ctl00_mainContent_drpSelectWeek">
+	<option value="1">29/12 To 04/01</option>
+	<option value="2">05/01 To 11/01</option>
+	<option value="3">12/01 To 18/01</option>
+	<option value="4">19/01 To 25/01</option>
+	<option value="5">26/01 To 01/02</option>
+	<option value="6">02/02 To 08/02</option>
+	<option value="7">09/02 To 15/02</option>
+	<option value="8">16/02 To 22/02</option>
+	<option value="9">23/02 To 01/03</option>
+	<option value="10">02/03 To 08/03</option>
+	<option value="11">09/03 To 15/03</option>
+	<option value="12">16/03 To 22/03</option>
+	<option value="13">23/03 To 29/03</option>
+	<option value="14">30/03 To 05/04</option>
+	<option value="15">06/04 To 12/04</option>
+	<option value="16">13/04 To 19/04</option>
+	<option value="17">20/04 To 26/04</option>
+	<option value="18">27/04 To 03/05</option>
+	<option value="19">04/05 To 10/05</option>
+	<option selected="selected" value="20">11/05 To 17/05</option>
+	<option value="21">18/05 To 24/05</option>
+	<option value="22">25/05 To 31/05</option>
+	<option value="23">01/06 To 07/06</option>
+	<option value="24">08/06 To 14/06</option>
+	<option value="25">15/06 To 21/06</option>
+	<option value="26">22/06 To 28/06</option>
+	<option value="27">29/06 To 05/07</option>
+	<option value="28">06/07 To 12/07</option>
+	<option value="29">13/07 To 19/07</option>
+	<option value="30">20/07 To 26/07</option>
+	<option value="31">27/07 To 02/08</option>
+	<option value="32">03/08 To 09/08</option>
+	<option value="33">10/08 To 16/08</option>
+	<option value="34">17/08 To 23/08</option>
+	<option value="35">24/08 To 30/08</option>
+	<option value="36">31/08 To 06/09</option>
+	<option value="37">07/09 To 13/09</option>
+	<option value="38">14/09 To 20/09</option>
+	<option value="39">21/09 To 27/09</option>
+	<option value="40">28/09 To 04/10</option>
+	<option value="41">05/10 To 11/10</option>
+	<option value="42">12/10 To 18/10</option>
+	<option value="43">19/10 To 25/10</option>
+	<option value="44">26/10 To 01/11</option>
+	<option value="45">02/11 To 08/11</option>
+	<option value="46">09/11 To 15/11</option>
+	<option value="47">16/11 To 22/11</option>
+	<option value="48">23/11 To 29/11</option>
+	<option value="49">30/11 To 06/12</option>
+	<option value="50">07/12 To 13/12</option>
+	<option value="51">14/12 To 20/12</option>
+	<option value="52">21/12 To 27/12</option>
+
+</select>
+                </th>
+
+                <th align="center">Mon</th><th align="center">Tue</th><th align="center">Wed</th><th align="center">Thu</th><th align="center">Fri</th><th align="center">Sat</th><th align="center">Sun</th>
+            </tr>
+            <tr>
+                <th align="center">11/05</th><th align="center">12/05</th><th align="center">13/05</th><th align="center">14/05</th><th align="center">15/05</th><th align="center">16/05</th><th align="center">17/05</th>
+                
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Slot 1 </td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 2 </td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1892679">JPD123-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=6dnCI8K184zSh7%2fYYXk2ZQ%3d%3d&amp;SessionNo=F9EHvqN%2bdUjlw7x5OhB%2faQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at P.007 - <a class="label label-default" href="https://meet.google.com/ruv-shqw-grf" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(9:30-11:45)</span><br></a></p></td><td>-</td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1910641">IOT102-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=MWrjFciA68ZB9nulo6TW1A%3d%3d&amp;SessionNo=F9EHvqN%2bdUjlw7x5OhB%2faQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at P.117 - <a class="label label-default" href="https://meet.google.com/fky-atbn-xyq" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(9:30-11:45)</span><br></a></p></td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1892680">JPD123-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=6dnCI8K184zSh7%2fYYXk2ZQ%3d%3d&amp;SessionNo=TOzW%2b2PecME5SIRGC1cQKQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at P.007 - <a class="label label-default" href="https://meet.google.com/ruv-shqw-grf" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(9:30-11:45)</span><br></a></p></td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 3 </td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1900891">PRJ301-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=GTJiuwxGNDd1MUm4wrFEDA%3d%3d&amp;SessionNo=F9EHvqN%2bdUjlw7x5OhB%2faQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at P.233 - <a class="label label-default" href="https://meet.google.com/efc-padj-aob" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(12:30-14:45)</span><br></a></p></td><td>-</td><td>-</td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1900892">PRJ301-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=GTJiuwxGNDd1MUm4wrFEDA%3d%3d&amp;SessionNo=TOzW%2b2PecME5SIRGC1cQKQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at P.233 - <a class="label label-default" href="https://meet.google.com/efc-padj-aob" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(12:30-14:45)</span><br></a></p></td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 4 </td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1906172">SWR302-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=8sZdLpFF7Vpk3D03Vczy4A%3d%3d&amp;SessionNo=F9EHvqN%2bdUjlw7x5OhB%2faQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at NVH 608(<span class="label label-primary">Học tại nhà văn hóa Sinh viên, khu Đại học quốc gia</span>) - <a class="label label-default" href="https://meet.google.com/sjo-ycir-ftt" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(15:00-17:15)</span><br></a></p></td><td>-</td><td>-</td><td><p><a href="../Schedule/ActivityDetail.aspx?id=1906173">SWR302-</a><a class="label label-warning" href="http://flm.fpt.edu.vn/gui/role/guest/ListScheduleSyllabus?subjectCode=8sZdLpFF7Vpk3D03Vczy4A%3d%3d&amp;SessionNo=TOzW%2b2PecME5SIRGC1cQKQ%3d%3d&amp;token=eyJhbGciOiJSUzI1NiIsImtpZCI6IjVDNDIyRTg5NEE1QkQxOTAwQzI3NDVGMDE2RkRDRjI1IiwidHlwIjoiYXQrand0In0.eyJuYmYiOjE3Nzg0MzIyNTAsImV4cCI6MTc3ODQzNTg1MCwiaXNzIjoiaHR0cHM6Ly9mZWlkLmZwdC5lZHUudm4iLCJhdWQiOiJodHRwczovL2ZlaWQuZnB0LmVkdS52bi9yZXNvdXJjZXMiLCJjbGllbnRfaWQiOiJmYXAtc2VydmljZSIsInN1YiI6IjMxMjRkYjUwLTFkZTctNGUyMi05OGY1LWY3YTlmNTgwNzI5NSIsImF1dGhfdGltZSI6MTc3ODQzMjI1MCwiaWRwIjoibG9jYWwiLCJDb25zZW50R2l2ZW4iOiJ0cnVlIiwidXNlcklkIjoiMzEyNGRiNTAtMWRlNy00ZTIyLTk4ZjUtZjdhOWY1ODA3Mjk1IiwidXNlclR5cGUiOiJTdHVkZW50cyIsImVtYWlsIjoicGh1Y2hjbTIwMDZAZ21haWwuY29tIiwicm9sZSI6IkZBUEZQVFUgU3R1ZGVudHMiLCJ1c2VybmFtZSI6InBodWNoY20yMDA2QGdtYWlsLmNvbSIsImNhbXB1c0lkIjoiMTg4NWU3YzktZTg2MS00YTIzLTk3YzUtZDAzZTk4ZmNkZjc2IiwiY2FtcHVzQ29kZSI6IkhDTSIsInByb2plY3RDYW1wdXNlcyI6Ilt7XCJQcm9qZWN0Q29kZVwiOlwiRkFQXCIsXCJQcm9qZWN0SWRcIjpcImNiMzg3M2U1LWQxMDgtNGY0OC04MzZkLWYyNTdlOTUzMzY2MVwiLFwiQ2FtcHVzSWRcIjpcIjE4ODVlN2M5LWU4NjEtNGEyMy05N2M1LWQwM2U5OGZjZGY3NlwiLFwiQ2FtcHVzQ29kZVwiOlwiSENNXCIsXCJQcm9qZWN0VXNlcklkXCI6XCJcIixcIlJvbGxOdW1iZXJcIjpcIlNFMjAzMDU1XCIsXCJJc0FjdGl2ZVwiOnRydWV9XSIsImp0aSI6IkZDMjZEQTY0NDQ4MUQ2QzNGQUQ4QjBFQjM2NUU3NDAxIiwic2lkIjoiRjBGQUMyQUY5NkNBNDc1MkUyQjEwQ0RGOUI4ODdGMjIiLCJpYXQiOjE3Nzg0MzIyNTAsInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCIsImlkZW50aXR5LXNlcnZpY2UiXSwiYW1yIjpbInB3ZCJdfQ.DVtxXvRRQlfDc9L8BPBGVS9aB3HPH8Tz8f1bK5_cc8EZ-XYvtXb1kj9teK_hZEsp2GP3fDZV2t1iuktl-pVTC9qj5DNiFEZx3R-k8yiXzjgP3VaElG-336376WdFE0qW0t9S2XRHvxiNGVybSL3kjsCMe3qyKjzf69aVmFNEp5PDsMREqT1xjJowSGblmV-NNNC7P0D6yn9HJ0xoPaTeitCaUGnpoMqgMW4eK46tucOcbvlvcOUhVtpR5M-4cYJD5T0uqF2ESzH_wMMfCjQMN1bxcIBvwJBa0hx0sxwh_LMBbcYc-S4PY7vVWCsA9quPU5jWx5-7f3v1y9aTlWhxWQ" target="_blank">View Materials</a><br> at NVH 608(<span class="label label-primary">Học tại nhà văn hóa Sinh viên, khu Đại học quốc gia</span>) - <a class="label label-default" href="https://meet.google.com/sjo-ycir-ftt" target="_blank">Meet URL</a><a> <br>(<font color="red">Not yet</font>)<br><span class="label label-success">(15:00-17:15)</span><br></a></p></td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 5 </td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 6 </td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 7 </td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr><tr><td>Slot 8 </td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+        </tbody>
+    </table>
+    <p>
+        <b>More note / Chú thích thêm</b>:
+    </p>
+    <div id="ctl00_mainContent_divfoot"><ul><li>(<font color="green">attended</font>): PhucNNSE203055 had attended this activity / Nguyễn Ngọc Phúc đã tham gia hoạt động này</li><li>(<font color="red">absent</font>): PhucNNSE203055 had NOT attended this activity / Nguyễn Ngọc Phúc đã vắng mặt buổi này</li>   <li>(-): no data was given / chưa có dữ liệu</li> </ul></div>
+    <p>
+    </p>
+    
+
+                                </div>
+                            </td>
+                        </tr>
+                        <tr style="border-bottom: 0 none">
+                            <td>
+                                <br>
+
+                                <table width="100%" style="border: 1px solid transparent;" id="cssTable">
+
+                                    <tbody><tr>
+                                        <td>
+                                            
+
+                                            <div id="ctl00_divSupporthcm">
+                                                <br>
+                                                Sinh viên có nhu cầu thực hiện các thủ tục, dịch vụ vui lòng liên hệ Trung tâm Dịch vụ Sinh viên tại Phòng 202, điện thoại : <strong>028.73005585</strong>  , <strong>email: sschcm@fe.edu.vn</strong>
+                                                <br>
+                                            </div>
+                                            
+                                            
+                                            
+                                        </td>
+
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <p style="text-align: center">
+                                                © Powered by <a href="http://fpt.edu.vn" target="_blank">FPT University</a>&nbsp;|&nbsp;
+        <a href="http://cms.fpt.edu.vn/" target="_blank">CMS</a>&nbsp;|&nbsp; <a href="http://library.fpt.edu.vn" target="_blank">library</a>&nbsp;|&nbsp; <a href="http://library.books24x7.com" target="_blank">books24x7</a>
+                                                <span id="ctl00_lblHelpdesk"></span>
+                                            </p>
+                                        </td>
+                                    </tr>
+                                </tbody></table>
+
+                            </td>
+                        </tr>
+                    </tbody></table>
+
+                </form>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-10421012-13']);
+        _gaq.push(['_trackPageview']);
+
+        (function () {
+            var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+
+    </script>
+
+    <script type="text/javascript">
+        var isClose = false;
+
+        //this code will handle the F5 or Ctrl+F5 key
+        //need to handle more cases like ctrl+R whose codes are not listed here
+        document.onkeydown = checkKeycode;
+        function checkKeycode(e) {
+            var keycode;
+            if (window.event)
+                keycode = window.event.keyCode;
+            else if (e)
+                keycode = e.which;
+            if (keycode == 116) {
+                isClose = true;
+            }
+        }
+        function somefunction() {
+            isClose = true;
+        }
+
+        //<![CDATA[
+
+        function bodyUnload() {
+
+            if (!isClose) {
+                var request = GetRequest();
+                request.open("GET", "LogOut.aspx", true);
+                request.send();
+            }
+        }
+        function GetRequest() {
+            var request = null;
+            if (window.XMLHttpRequest) {
+                //incase of IE7,FF, Opera and Safari browser
+                request = new XMLHttpRequest();
+            }
+            else {
+                //for old browser like IE 6.x and IE 5.x
+                request = new ActiveXObject('MSXML2.XMLHTTP.3.0');
+            }
+            return request;
+        }
+        //]]>
+    </script>
+
+<script defer="" src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;56c6dd7e4ecf4947aa540f48289e45af&quot;,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
+
+
+</body></html>

@@ -513,6 +513,44 @@ class DatabaseService:
 
 ---
 
+### C8: Pending Checks Service
+
+**Purpose:** Track and report pending items (waiting grades, upcoming exams, applications)
+
+**Responsibilities:**
+- Compare exam schedule with grades to find waiting items
+- Identify upcoming exams within notification window
+- Track pending applications
+- Provide summary for `/pending-checks` command
+
+**Interface:**
+```python
+class PendingChecksService:
+    def __init__(self, fap_client, database):
+        self.fap_client = fap_client
+        self.database = database
+
+    async def get_waiting_grades(self):
+        # Get subjects with passed exams but no grade
+        # Returns: List[WaitingGradeItem]
+
+    async def get_upcoming_exams(self, days=7):
+        # Get exams within next N days
+        # Returns: List[ExamItem]
+
+    async def get_pending_applications(self):
+        # Get pending applications
+        # Returns: List[ApplicationItem]
+
+    async def get_summary(self):
+        # Get complete summary for display
+        # Returns: PendingChecksSummary
+```
+
+**Dependencies:** FAP Client, Exam Parser, Grade Parser, Database
+
+---
+
 ## Data Architecture
 
 ### Database Schema

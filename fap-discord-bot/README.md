@@ -1,438 +1,163 @@
 # FAP Discord Bot
 
-**Bot Discord tự-host để xem lịch học & lịch thi từ FPT University Academic Portal (FAP).**
+Discord bot for viewing FPT University FAP data from Discord. The current implementation supports schedule, exams, grades, attendance, session auto-refresh, and interactive grade/attendance views.
 
----
+## What Works Now
 
-## ✨ Tính năng
+- FeID login through Playwright
+- Cookie reuse and session validation
+- Auto-refresh when a fetch fails because the session expired
+- Weekly schedule fetching
+- Exam schedule fetching
+- Grade parsing and cumulative GPA calculation
+- Attendance parsing with per-term and per-course browsing
+- Slash commands for status and health checks
+- Global async lock in `scraper/auth.py` to avoid concurrent browser fetch conflicts
 
-- ✅ **Đăng nhập FeID tự động** - Tự động điền username/password qua Playwright
-- ✅ **Bypass Cloudflare** - Sử dụng non-headless browser cho Turnstile challenge
-- ✅ **Auto-refresh session** - Tự động đăng nhập lại khi session hết hạn
-- ✅ **Cào lịch học** - Parse lịch học theo tuần từ FAP
-- ✅ **Cào lịch thi** - Parse lịch thi cuối kỳ
-- ✅ **Xem điểm số** - Parse bảng điểm học phần & tính GPA
-- ✅ **Lưu cookie** - Lưu authentication để tái sử dụng
-- ✅ **Chọn tuần** - Lấy lịch bất kỳ tuần nào
-- ✅ **Parse HTML** - Trích xuất thông tin lớp (phòng, thời gian, điểm danh)
-- ✅ **Tích hợp Discord Bot** - Lệnh slash để xem lịch
-- ✅ **Concurrent lock** - Tránh conflict khi nhiều lệnh gọi cùng lúc
+## Not Fully Live Yet
 
----
+- Background schedulers and automatic notifications are still design/partial implementation work
+- `bot/commands/pending_checks.py` exists, but it is not loaded by `bot/bot.py`
+- Application scraping support is only partial
 
-## 🚀 Cài đặt nhanh
+## Project Layout
 
-### Yêu cầu
-
-```bash
-# Python 3.11+
-python --version
-
-# Chromium browser (Playwright sẽ tự tải)
+```text
+fap-discord-bot/
+|-- main.py
+|-- README.md
+|-- CHANGELOG.md
+|-- .env.example
+|-- bot/
+|   |-- bot.py
+|   `-- commands/
+|-- scraper/
+|-- utils/
+|-- docs/
+|   |-- README.md
+|   |-- DEVELOPMENT.md
+|   |-- ARCHITECTURE.md
+|   `-- features/
+`-- data/
 ```
 
-### 1. Cài đặt dependencies
+## Requirements
+
+- Python 3.11+
+- Chromium installed through Playwright
+- Discord bot token
+- FAP credentials
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 2. Đăng nhập (Chỉ 1 lần)
+## Configuration
+
+Create `.env` from `.env.example`.
+
+Core values used by the loaded bot:
+
+```env
+DISCORD_TOKEN=your_discord_bot_token_here
+FAP_USERNAME=your_feid@fe.edu.vn
+FAP_PASSWORD=your_password
+HEADLESS=true
+USER_AGENT=Mozilla/5.0 ...
+FAP_STUDENT_ID=SE123456
+FAP_CAMPUS=4
+```
+
+Notes:
+
+- `FAP_STUDENT_ID` is required by the attendance and grade commands.
+- `FAP_CAMPUS` defaults to `4` in code if not set.
+- The root-level `.env.example` includes extra scheduler-related variables for future notification work.
+
+## First Run
+
+1. Install dependencies.
+2. Create `.env`.
+3. Run the initial login flow:
 
 ```bash
 python scraper/auto_login_feid.py login your_feid@fe.edu.vn your_password
 ```
 
-**Quá trình diễn ra:**
-- Chrome mở → trang đăng nhập FAP (non-headless để bypass Cloudflare)
-- Chọn cơ sở (FU-Hòa Lạc)
-- Click "Login With FeID"
-- Tự động điền username + password
-- Lưu cookies vào `data/fap_cookies.json`
-- Lưu browser profile vào `data/chrome_profile/`
-
-**Kết quả mong đợi:**
-```
-✅ FEID login successful
-✅ Schedule page accessible
-✅ 13 cookies saved to data/fap_cookies.json
-```
-
-### 3. Test lấy lịch
+4. Start the bot:
 
 ```bash
-# Lịch học - Tuần hiện tại
-python scraper/auto_login_feid.py fetch
-
-# Lịch học - Tuần cụ thể
-python scraper/auto_login_feid.py fetch 5 2026
-```
-
-### 4. Chạy Discord Bot
-
-```bash
-# Thiết lập environment variables trước
-cp .env.example .env
-# Edit .env với thông tin của bạn
-
-# Chạy bot
 python main.py
 ```
 
----
+Cookies are stored under `data/`, and session refresh is handled by `scraper/session_validator.py` plus the `FAPAuth` adapter in `scraper/auth.py`.
 
-## 📁 Cấu trúc Project
+## Slash Commands
 
-```
-fap-discord-bot/
-├── 📄 Cấu hình
-│   ├── .env                    ← Environment variables (SECRET)
-│   ├── .env.example            ← Mẫu
-│   ├── requirements.txt        ← Python dependencies
-│   ├── config.py               ← Cấu hình bot
-│   ├── Dockerfile              ← Docker config
-│   └── docker-compose.yml      ← Docker Compose config
-│
-├── 📚 Tài liệu
-│   ├── README.md                       ← File này (bắt đầu từ đây!)
-│   ├── CHANGELOG.md                    ← Lịch sử thay đổi
-│   └── docs/                           ← Tài liệu chi tiết
-│       ├── DEVELOPMENT.md              ← Hướng dẫn phát triển
-│       ├── ARCHITECTURE.md             ← Kiến trúc hệ thống
-│       ├── features/                   ← Tài liệu feature
-│       │   └── EXAM.md                 ← Exam schedule feature
-│       └── archive/                    ← Tài liệu cũ (deprecated)
-│           └── FLARESOLVERR.md         ← FlareSolverr guide (đã cũ)
-│
-├── 🚀 Entry Points
-│   ├── main.py                 ← Entry point bot
-│   └── manual_login.py         ← Login thủ công
-│
-├── 📂 Data (Được tạo khi chạy)
-│   ├── chrome_profile/         ← Persistent browser profile
-│   └── fap_cookies.json        ← Cookies được export (sau login)
-│
-├── 💻 Source Code
-│   ├── scraper/                ← Authentication & Parsing
-│   │   ├── __init__.py
-│   │   ├── auth.py             ← Adapter (FAPAuth interface cho bot)
-│   │   ├── auto_login_feid.py  ← Auth chính (FeID + Playwright)
-│   │   ├── session_validator.py← Session health check & auto-refresh
-│   │   ├── parser.py           ← HTML parser (schedule)
-│   │   ├── exam_parser.py      ← HTML parser (exam)
-│   │   ├── grade_parser.py     ← HTML parser (grade)
-│   │   └── cloudflare.py       ← Turnstile solver
-│   ├── bot/                    ← Discord bot
-│   │   ├── bot.py              ← Main bot class
-│   │   └── commands/
-│   │       ├── schedule.py     ← Lệnh lịch học
-│   │       ├── exam.py         ← Lệnh lịch thi
-│   │       ├── grade.py        ← Lệnh điểm số
-│   │       ├── attendance.py   ← Lệnh điểm danh
-│   │       └── status.py       ← Lệnh trạng thái
-│   └── utils/                  ← Utility functions
-│
-└── 📄 Debug
-    ├── schedule_fetched.html    ← HTML lịch học mới fetch được
-    └── exam_schedule_final.html ← HTML lịch thi
+Currently loaded in `bot/bot.py`:
+
+```text
+/schedule today
+/schedule week [week] [year]
+/exam schedule
+/exam upcoming
+/grade view
+/grade this-term
+/grade gpa
+/attendance view
+/attendance this-term
+/status
+/ping
 ```
 
----
+Command behavior:
 
-## 🔧 Cách hoạt động
+- `schedule` fetches the current or requested week and formats classes from `scraper/parser.py`.
+- `exam` uses `scraper/exam_parser.py`.
+- `grade` provides an interactive term/course browser and GPA summary.
+- `attendance` provides an interactive term/course browser plus a dashboard-style current-term view.
+- `status` and `ping` expose runtime health information.
 
-### Kiến trúc Authentication
+## Runtime Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Discord Bot                                               │
-│  User gõ: /schedule today hoặc /exam schedule               │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  FAPAuth (Adapter) - scraper/auth.py                       │
-│  - Global lock để tránh concurrent Chrome access            │
-│  - Auto-refresh session khi expired                         │
-│  - Flag để tránh duplicate refresh                          │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  FAPAutoLogin - scraper/auto_login_feid.py                 │
-│  - fetch_schedule() - Lấy lịch học                          │
-│  - fetch_exam_schedule() - Lấy lịch thi                     │
-│  - Sử dụng cookies từ fap_cookies.json                      │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  FAP Portal (fap.fpt.edu.vn)                                │
-│  - Trả về HTML                                               │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  FAPParser / ExamParser                                     │
-│  - Parse HTML table → ScheduleItem[] hoặc ExamItem[]        │
-└─────────────────────────────────────────────────────────────┘
+The main request path is:
+
+```text
+Discord slash command
+  -> bot command cog
+  -> scraper.auth.FAPAuth
+  -> scraper.auto_login_feid.FAPAutoLogin
+  -> FAP portal HTML
+  -> parser module
+  -> Discord response
 ```
 
-### Session Refresh Flow
+Important runtime details:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Bot Startup                                                │
-│  └─► FAPAuth.get_session()                                 │
-│      └─► SessionValidator.check_session_health()           │
-│          ├─► Valid → Ready                                  │
-│          └─► Expired → refresh_session(headless=False)      │
-│                       (Chrome opens for Cloudflare)         │
-└─────────────────────────────────────────────────────────────┘
+- `FAPAuth` wraps fetch operations and retries once after a session refresh.
+- A shared `asyncio.Lock` in `scraper/auth.py` serializes browser-backed fetches.
+- `StatusCommands` receives the shared auth instance from `bot/bot.py`.
 
-┌─────────────────────────────────────────────────────────────┐
-│  User Command (/schedule today)                             │
-│  └─► FAPAuth.fetch_schedule() [WITH LOCK]                  │
-│      ├─► Try fetch with current session                    │
-│      ├─► Failed? → _refresh_session_once() [NO LOCK]       │
-│      │          └─► Other commands wait if refreshing      │
-│      └─► Retry fetch                                       │
-└─────────────────────────────────────────────────────────────┘
-```
+## Troubleshooting
 
----
+- `Missing DISCORD_TOKEN`: check `.env`.
+- `No cookies found`: run the login flow again.
+- `Failed to fetch ...`: session may be expired or FAP may be unavailable.
+- Attendance or grades returning empty data: verify `FAP_STUDENT_ID` and `FAP_CAMPUS`.
+- Browser/login issues: rerun `playwright install chromium` and retry the login flow in non-headless mode if needed.
 
-## 📊 Định dạng dữ liệu
+## Documentation
 
-### ScheduleItem (Lịch học)
+- Docs index: `docs/README.md`
+- Developer notes: `docs/DEVELOPMENT.md`
+- System architecture: `docs/ARCHITECTURE.md`
+- Exam feature notes: `docs/features/EXAM.md`
+- Grade feature notes: `docs/features/GRADE.md`
+- Historical FlareSolverr guide: `docs/archive/FLARESOLVERR.md`
 
-```python
-@dataclass
-class ScheduleItem:
-    subject_code: str      # "COM101"
-    subject_name: str = "" # "Introduction to Computing"
-    room: str = ""         # "A301"
-    day: str = ""          # "Mon", "Tue", "Wed"...
-    date: str = ""         # "02/03/2026"
-    slot: int = 0         # 1-8
-    start_time: str = ""  # "7:00"
-    end_time: str = ""    # "9:15"
-    status: str = ""       # "attended", "absent", "-"
-```
+## Status
 
-### ExamItem (Lịch thi)
-
-```python
-@dataclass
-class ExamItem:
-    no: int                 # Số thứ tự
-    subject_code: str       # "DBI202"
-    subject_name: str       # "Database Systems"
-    date: str              # "22/03/2026"
-    room: str              # "115"
-    time: str              # "07h00-09h00"
-    exam_form: str         # "PRACTICAL_EXAM"
-    exam_type: str         # "PE"
-    publication_date: str  # "09/03/2026"
-```
-
-### GradeItem (Điểm số)
-
-```python
-@dataclass
-class GradeItem:
-    no: int                 # Số thứ tự
-    subject_code: str       # "MAD101"
-    subject_name: str       # "Discrete mathematics"
-    credits: int            # Số tín chỉ (3, 4...)
-    mid_term: float        # Điểm giữa kỳ (0-10)
-    final: float           # Điểm cuối kỳ (0-10)
-    total: float           # Điểm tổng kết (0-10)
-    status: str            # "Passed", "Is Suspended", "In Progress"
-    grade_4scale: float    # Điểm thang 4.0 (0-4)
-```
-
----
-
-## 🗄️ Tham chiếu lệnh
-
-### Authentication
-
-```bash
-# Login với tham số
-python scraper/auto_login_feid.py login your_feid@fe.edu.vn password123
-
-# Login với environment variables
-set FAP_FEID=your_feid@fe.edu.vn
-set FAP_PASSWORD=password123
-python scraper/auto_login_feid.py login
-```
-
-### Session Validator
-
-```bash
-# Check session health
-python scraper/session_validator.py check
-
-# Refresh session
-python scraper/session_validator.py refresh
-
-# Ensure valid session
-python scraper/session_validator.py ensure
-```
-
-### Lấy lịch
-
-```bash
-# Lịch học - Tuần hiện tại (mặc định)
-python scraper/auto_login_feid.py fetch
-
-# Lịch học - Tuần và năm cụ thể
-python scraper/auto_login_feid.py fetch 5 2026
-```
-
-### Lệnh Discord Bot
-
-```
-/schedule today       - Xem lịch học hôm nay
-/schedule week        - Xem lịch học tuần này
-/schedule week 5      - Xem lịch học tuần 5
-/exam schedule        - Xem lịch thi
-/exam upcoming        - Xem lịch thi 7 ngày tới
-/grade this-term      - Xem điểm học kỳ hiện tại (Dashboard)
-/grade view           - Xem chi tiết điểm theo kỳ
-/grade gpa            - Xem GPA tổng kết
-/attendance view      - Xem chi tiết điểm danh
-/attendance this-term - Xem điểm danh học kỳ này
-/status               - Kiểm tra trạng thái bot
-/ping                 - Ping bot
-```
-
----
-
-## 🔑 Cấu hình
-
-### Environment Variables
-
-Tạo file `.env` từ `.env.example`:
-
-```bash
-# Discord Bot
-DISCORD_TOKEN=your_discord_bot_token_here
-
-# FAP Credentials
-FAP_USERNAME=your_feid@fe.edu.vn
-FAP_PASSWORD=your_password
-
-# Browser Settings
-HEADLESS=true
-USER_AGENT=Mozilla/5.0...
-```
-
----
-
-## 🐛 Xử lý sự cố
-
-| Vấn đề | Nguyên nhân | Giải pháp |
-|--------|-------------|-----------|
-| "No cookies found" | `data/fap_cookies.json` thiếu | Chạy `python scraper/auto_login_feid.py login` |
-| "Session expired" | Cookies hết hạn | Bot sẽ tự refresh, hoặc chạy manual `python scraper/session_validator.py refresh` |
-| "Target closed" | Chrome process conflict | Bot có lock để tránh này, restart nếu vẫn lỗi |
-| "Found 0 classes" | Tuần không có lịch | Thử tuần khác |
-| Bot không phản hồi | Discord token sai | Kiểm tra file `.env` |
-| Lệnh exam đơ | Session đang refresh | Đợi refresh xong (~30s) hoặc test lại |
-
-### Debug Mode
-
-```bash
-# Xem HTML raw để debug
-# Sau khi chạy lệnh, check file:
-cat schedule_fetched.html
-cat exam_schedule_final.html
-```
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology | Mục đích |
-|-----------|-----------|----------|
-| Browser Automation | Playwright Chromium | Điều khiển browser |
-| Cloudflare Bypass | Non-headless Chrome | Bypass Turnstile |
-| HTML Parsing | BeautifulSoup4 | Trích xuất dữ liệu |
-| Discord API | discord.py | Framework bot |
-| Concurrency | asyncio.Lock | Tránh Chrome race condition |
-| Language | Python | 3.11+ |
-
----
-
-## 📈 Trạng thái phát triển
-
-- [x] Authentication Module (FeID + Playwright)
-- [x] Session Auto-Refresh
-- [x] HTML Parser (Schedule)
-- [x] HTML Parser (Exam)
-- [x] HTML Parser (Grade)
-- [x] Cookie Persistence
-- [x] Discord Bot Commands (Schedule)
-- [x] Discord Bot Commands (Exam)
-- [x] Discord Bot Commands (Grade)
-- [x] Discord Bot Commands (Attendance)
-- [x] Concurrent Access Lock
-- [x] Week Selection
-- [ ] Keep-Alive Heartbeat
-- [ ] Notification System
-- [ ] Multi-user Support
-
----
-
-## 📚 Tài liệu
-
-### Tài liệu chính
-
-| Tài liệu | Mô tả |
-|----------|-------|
-| **[README.md](README.md)** | Tài liệu chính của project (file này) |
-| **[CHANGELOG.md](CHANGELOG.md)** | Lịch sử thay đổi phiên bản |
-| **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** | Hướng dẫn phát triển & logic chi tiết |
-
-### Tài liệu kỹ thuật
-
-| Tài liệu | Mô tả |
-|----------|-------|
-| **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Kiến trúc chi tiết với flow diagram |
-| **[features/EXAM.md](docs/features/EXAM.md)** | Tài liệu tính năng Exam Schedule |
-| **[features/GRADE.md](docs/features/GRADE.md)** | Tài liệu tính năng Grade/Score |
-
-### Tài liệu archive (đã cũ)
-
-| Tài liệu | Trạng thái |
-|----------|------------|
-| **[archive/FLARESOLVERR.md](docs/archive/FLARESOLVERR.md)** | ⚠️ Đã thay bằng non-headless Chrome |
-| `scraper/archive/*.md` | Các phương pháp experiment đã archive |
-
-### Cấu trúc nhanh
-
-```
-fap-discord-bot/
-├── README.md                    ← Bắt đầu từ đây
-├── CHANGELOG.md                 ← Cập nhật phiên bản
-└── docs/
-    ├── DEVELOPMENT.md           ← Hướng dẫn dev
-    ├── ARCHITECTURE.md          ← Kiến trúc hệ thống
-    └── features/
-        └── EXAM.md              ← Tài liệu feature Exam
-```
-
----
-
-## 📄 License
-
-MIT License
-
----
-
-*Updated: 2026-03-11*
-*Status: ✅ Production Ready*
-*Architecture: FeID + Playwright + Auto-Refresh + Grade/Attendance*
+The bot is usable for manual slash-command queries. Proactive scheduling and notification documents exist in the repository, but they should be treated as planning/design references unless the corresponding runtime code is wired into `bot/bot.py`.

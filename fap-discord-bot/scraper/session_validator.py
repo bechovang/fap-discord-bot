@@ -7,6 +7,7 @@ import asyncio
 from pathlib import Path
 from playwright.async_api import async_playwright
 from .auto_login_feid import FAPAutoLogin
+from .flaresolverr_auth import FAPFlareSolverrAuth
 
 logger = logging.getLogger(__name__)
 
@@ -111,14 +112,51 @@ class SessionValidator:
 
             if success:
                 logger.info("✅ Session refreshed successfully")
-            else:
-                logger.error("❌ Session refresh failed")
+                return True
 
-            return success
+            logger.warning("Playwright refresh failed, trying FlareSolverr fallback...")
+            return await self._refresh_with_flaresolverr()
 
         except Exception as e:
             logger.error(f"❌ Session refresh error: {e}")
+            logger.warning("Trying FlareSolverr fallback after Playwright refresh error...")
+            return await self._refresh_with_flaresolverr()
+
+    async def _refresh_with_flaresolverr(self) -> bool:
+        """
+        Fall back to FlareSolverr when the direct Playwright login flow is
+        blocked by Cloudflare.
+        """
+        flaresolverr_url = os.getenv("FLARESOLVERR_URL")
+        if not flaresolverr_url:
+            logger.warning("FlareSolverr fallback skipped - FLARESOLVERR_URL is not configured")
             return False
+
+        logger.info(f"Trying FlareSolverr fallback via {flaresolverr_url}")
+
+        def _run_flaresolverr_refresh() -> bool:
+            auth = FAPFlareSolverrAuth(
+                flaresolverr_url=flaresolverr_url,
+                data_dir=str(self.data_dir)
+            )
+            return auth.refresh_cookies()
+
+        try:
+            success = await asyncio.to_thread(_run_flaresolverr_refresh)
+        except Exception as e:
+            logger.error(f"FlareSolverr fallback error: {e}")
+            return False
+
+        if success:
+            logger.info("✅ FlareSolverr fallback refreshed shared cookies successfully")
+            return True
+
+        logger.warning(
+            "FlareSolverr fallback failed. If you used FlareSolverr before, "
+            "restart it and re-authenticate that session with "
+            "`python scraper/flaresolverr_auth.py login`."
+        )
+        return False
 
     async def get_valid_session(self) -> bool:
         """

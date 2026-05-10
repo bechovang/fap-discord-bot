@@ -577,9 +577,14 @@ FAP Discord Bot is a **proactive personal assistant** for FPT University student
 | `/attendance [term?] [week?]` | View attendance | term: term, week: week number |
 | `/exams [term?]` | View exam schedule | term: term identifier |
 | `/applications` | View applications | none |
+| `/pending-checks [type?]` | View pending items | type: grades/exams/attendance (optional) |
+| `/pending-checks grades` | View waiting grades | none |
+| `/pending-checks exams` | View upcoming exams | none |
+| `/pending-checks attendance` | View unmarked attendance | none |
 | `/gpa [term?] [--exclude]` | Calculate GPA | term: term, exclude: subject list |
 | `/config` | Configure bot | key: setting name, value: setting value |
 | `/status` | View bot status | none |
+| `/ping` | Check bot latency | none |
 
 ### UI-2: Notification Formats
 
@@ -654,6 +659,30 @@ FAP Discord Bot is a **proactive personal assistant** for FPT University student
 📚 Chuẩn bị: CMND, bút, giấy
 ```
 
+#### N2.7: Pending Checks Summary
+```
+⏳ Pending Checks Dashboard
+Items being monitored for updates
+
+📊 Waiting for Grades (2)
+🟡 CS105 - 5 days
+🟢 MA201 - 2 days
+
+📋 Pending Applications (1)
+⏳ Hoãn nghĩa vụ quân sự
+   📝 Dạ em xin giấy hoãn nghĩa vụ...
+   📅 27/08/2025
+
+📋 Attendance Not Marked (1)
+⏳ CS105 - Object-Oriented Programming
+   📅 12/03/2026 | Slot 3
+   ⚠️ 🟠 Ending soon!
+
+📅 Upcoming Exams (2)
+📌 CS205 - 20/02/2026
+📝 MA301 - 25/02/2026
+```
+
 ### UI-3: Color Scheme
 | Notification Type | Color (Hex) |
 |------------------|-------------|
@@ -664,6 +693,7 @@ FAP Discord Bot is a **proactive personal assistant** for FPT University student
 | Exam | 0x9b59b6 (Purple) |
 | Grade | 0x00ff00 (Green) |
 | Application | 0x00ff00 / 0xff0000 |
+| Pending | 0xffa500 (Orange/Gold) |
 
 ---
 

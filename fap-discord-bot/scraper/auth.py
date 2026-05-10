@@ -284,6 +284,34 @@ class FAPAuth:
 
             return html
 
+    async def fetch_application(self) -> Optional[str]:
+        """
+        Fetch application HTML with auto-refresh on failure
+
+        Returns:
+            HTML content or None if failed
+        """
+        async with _auth_lock:  # Prevent concurrent Chrome access
+            await self._ensure_auth()
+
+            # Try fetch first - need to implement in FAPAutoLogin
+            # For now, return None as placeholder
+            try:
+                html = await self._auth.fetch_application()
+
+                # If failed and auto-refresh enabled, refresh and retry
+                if not html and self.auto_refresh:
+                    if await self._refresh_session_once():
+                        logger.info("✅ Session refreshed - retrying fetch...")
+                        html = await self._auth.fetch_application()
+                    else:
+                        logger.error("❌ Fetch failed after refresh")
+
+                return html
+            except AttributeError:
+                logger.warning("fetch_application not yet implemented in FAPAutoLogin")
+                return None
+
     async def close(self):
         """Close browser and cleanup"""
         # FAPAutoLogin creates/closes browser per fetch call

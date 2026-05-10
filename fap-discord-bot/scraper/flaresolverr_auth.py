@@ -3,8 +3,10 @@ FAP Authentication - FlareSolverr
 Uses FlareSolverr proxy to bypass Cloudflare challenges
 """
 import asyncio
+import os
 import requests
 import json
+from pathlib import Path
 from typing import Optional, Dict, List
 
 
@@ -24,10 +26,12 @@ class FAPFlareSolverrAuth:
     FLARESOLVERR_URL = "http://localhost:8191/v1"
     SESSION_ID = "fap_session"  # Persistent session ID
 
-    def __init__(self, flaresolverr_url: str = None):
-        self.flaresolverr_url = flaresolverr_url or self.FLARESOLVERR_URL
+    def __init__(self, flaresolverr_url: str = None, data_dir: str = "data"):
+        self.flaresolverr_url = flaresolverr_url or os.getenv("FLARESOLVERR_URL") or self.FLARESOLVERR_URL
         self.session_id = self.SESSION_ID
         self._session_created = False
+        self.data_dir = Path(data_dir)
+        self.cookies_file = self.data_dir / "fap_cookies.json"
 
     def _request(self, payload: dict) -> dict:
         """Send request to FlareSolverr API"""
@@ -280,6 +284,40 @@ class FAPFlareSolverrAuth:
             return solution.get("cookies", [])
         except Exception:
             return []
+
+    def save_cookies(self, cookies: List[Dict]) -> bool:
+        """Persist cookies so the main Playwright fetchers can reuse them."""
+        if not cookies:
+            return False
+
+        self.cookies_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.cookies_file, "w", encoding="utf-8") as f:
+            json.dump(cookies, f, indent=2)
+
+        print(f"[+] Saved {len(cookies)} cookies to {self.cookies_file}")
+        return True
+
+    def refresh_cookies(self) -> bool:
+        """
+        Refresh the shared cookie jar using an existing FlareSolverr session.
+
+        This is useful as a fallback when the Playwright login flow is blocked
+        by Cloudflare but a FlareSolverr session is already authenticated.
+        """
+        html = self.fetch_schedule()
+        if not html:
+            return False
+
+        if 'ctl00_mainContent_drpSelectWeek' not in html:
+            print("[!] FlareSolverr session did not return an authenticated schedule page")
+            return False
+
+        cookies = self.get_cookies()
+        if not cookies:
+            print("[!] FlareSolverr returned no cookies to persist")
+            return False
+
+        return self.save_cookies(cookies)
 
 
 # Standalone functions

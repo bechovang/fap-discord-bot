@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from scraper.auth import FAPAuth
 from scraper.grade_parser import GradeParser, GPASummary
+from bot.progress import InteractionProgress
 
 logger = logging.getLogger(__name__)
 
@@ -209,11 +210,15 @@ class GPAButton(Button):
     async def callback(self, interaction: discord.Interaction):
         """Calculate and show cumulative GPA across all recent terms"""
         await interaction.response.defer(thinking=True)
+        total_terms = max(len(self.view.terms), 1)
+        progress = InteractionProgress(interaction, "Calculating GPA", ephemeral=False)
+        await progress.start(total_terms, "Preparing term fetch")
 
         # Fetch grades for all recent terms
         all_grades = {}
-        for term in self.view.terms:
+        for index, term in enumerate(self.view.terms, start=1):
             term_name = term['name']
+            await progress.update(index - 1, total_terms, f"Fetching {term_name}")
             html = await self.view.auth.fetch_grades(
                 student_id=self.view.student_id,
                 term=term_name
@@ -222,8 +227,10 @@ class GPAButton(Button):
                 grades = self.view.parser.parse_grades(html)
                 if grades:
                     all_grades[term_name] = grades
+            await progress.update(index, total_terms, f"Processed {term_name}")
 
         if not all_grades:
+            await progress.fail(total_terms, total_terms, "No grade data found")
             await interaction.followup.send("❌ No grade data found")
             return
 
@@ -257,6 +264,7 @@ class GPAButton(Button):
             )
 
         message = "\n".join(lines)
+        await progress.complete(total_terms, "Cumulative GPA ready")
         await interaction.followup.send(message[:1900])  # Discord limit
 
 
@@ -436,6 +444,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
 
         try:
             auth = await self._get_auth()
+            progress = InteractionProgress(interaction, "Loading Current-Term Grades")
 
             # Fetch default page - shows newest term (Fall2025) + course list
             html = await auth.fetch_grades(
@@ -456,6 +465,8 @@ class GradeCommands(commands.GroupCog, name="grade"):
                 await interaction.followup.send("❌ No courses found.", ephemeral=True)
                 return
 
+            await progress.start(len(courses), "Preparing course fetch")
+
             # Get term name from the page - get last term (most recent)
             terms = self.parser.extract_terms(html)
             term_name = terms[-1]['name'] if terms else "Current Term"
@@ -466,6 +477,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
             all_grades = []
 
             for i, course in enumerate(courses):
+                await progress.update(i, len(courses), f"Fetching {course['code'] or 'course'}")
                 logger.info(f"[{i+1}/{len(courses)}] Fetching grades for {course['code']}: {course.get('course_id')}")
                 if course['course_id']:
                     # Fetch detailed grades for this course
@@ -490,10 +502,12 @@ class GradeCommands(commands.GroupCog, name="grade"):
                         logger.warning(f"  No HTML returned for course {course['code']}")
                 else:
                     logger.warning(f"  Skipping course {course['code']} - no course_id")
+                await progress.update(i + 1, len(courses), f"Processed {course['code'] or 'course'}")
 
             logger.info(f"Total grades collected: {len(all_grades)}")
 
             if not all_grades:
+                await progress.fail(len(courses), len(courses), f"No grades found for {term_name}")
                 await interaction.followup.send(f"❌ No grades found for {term_name}", ephemeral=True)
                 return
 
@@ -576,6 +590,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
 
             embed.set_footer(text=f"Requested by {interaction.user.display_name}")
 
+            await progress.complete(len(courses), f"Loaded dashboard for {term_name}")
             await interaction.followup.send(embed=embed, ephemeral=True)
 
         except discord.NotFound:
@@ -606,6 +621,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
 
         try:
             auth = await self._get_auth()
+            progress = InteractionProgress(interaction, "Calculating Cumulative GPA")
 
             # Fetch base page to get terms
             html = await auth.fetch_grades(
@@ -627,9 +643,11 @@ class GradeCommands(commands.GroupCog, name="grade"):
 
             # Fetch grades for all terms - need to fetch each course individually
             all_grades = {}
+            completed_terms = 0
             for i, term in enumerate(terms):
                 term_name = term['name']
                 logger.info(f"[{i+1}/{len(terms)}] Processing term: {term_name}")
+                await progress.update(completed_terms, len(terms), f"Loading {term_name}")
 
                 # Fetch by term to get the course list
                 html = await auth.fetch_grades(
@@ -670,8 +688,11 @@ class GradeCommands(commands.GroupCog, name="grade"):
                 if term_grades:
                     all_grades[term_name] = term_grades
                     logger.info(f"  Total grades for {term_name}: {len(term_grades)}")
+                completed_terms += 1
+                await progress.update(completed_terms, len(terms), f"Processed {term_name}")
 
             if not all_grades:
+                await progress.fail(completed_terms, len(terms), "No grade data found")
                 await interaction.followup.send("❌ No grade data found", ephemeral=True)
                 return
 
@@ -743,10 +764,12 @@ class GradeCommands(commands.GroupCog, name="grade"):
 
             if len(message) > 1900:
                 chunks = [message[i:i+1900] for i in range(0, len(message), 1900)]
+                await progress.complete(len(terms), "Cumulative GPA ready")
                 await interaction.followup.send(chunks[0], ephemeral=True)
                 for chunk in chunks[1:]:
                     await interaction.followup.send(chunk, ephemeral=True)
             else:
+                await progress.complete(len(terms), "Cumulative GPA ready")
                 await interaction.followup.send(message, ephemeral=True)
 
         except discord.NotFound:

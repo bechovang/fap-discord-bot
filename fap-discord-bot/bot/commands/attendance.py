@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from scraper.auth import FAPAuth
 from scraper.attendance_parser import AttendanceParser, AttendanceSummary
+from bot.progress import InteractionProgress
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +285,7 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
 
         try:
             auth = await self._get_auth()
+            progress = InteractionProgress(interaction, "Loading Current-Term Attendance", ephemeral=False)
 
             # Fetch default page - shows newest term + first course
             html = await auth.fetch_attendance(
@@ -301,6 +303,8 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
                 await interaction.followup.send("❌ No courses found.")
                 return
 
+            await progress.start(len(courses), "Preparing course fetch")
+
             # Get term name from the page - find the current term (marked with <b>)
             terms = self.parser.extract_terms(html)
             current_term = next((t for t in terms if t.get('is_current')), None)
@@ -310,7 +314,8 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
             all_items = []
 
             # First course (Elementary Japanese) - already shown in default page
-            for course in courses:
+            for index, course in enumerate(courses, start=1):
+                await progress.update(index - 1, len(courses), f"Fetching {course['code'] or 'course'}")
                 if course['is_current']:
                     # Current course - parse from the HTML we already have
                     items = self.parser.parse_attendance(html)
@@ -335,8 +340,10 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
                             item.subject_name = course['name']
                         all_items.extend(items)
                         logger.info(f"Parsed {len(items)} attendance records for: {course['name']}")
+                await progress.update(index, len(courses), f"Processed {course['code'] or 'course'}")
 
             if not all_items:
+                await progress.fail(len(courses), len(courses), f"No attendance records found for {term_name}")
                 await interaction.followup.send(f"❌ No attendance records found for {term_name}")
                 return
 
@@ -444,6 +451,7 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
 
             embed.set_footer(text=f"Requested by {interaction.user.display_name}")
 
+            await progress.complete(len(courses), f"Loaded dashboard for {term_name}")
             await interaction.followup.send(embed=embed)
 
         except Exception as e:
