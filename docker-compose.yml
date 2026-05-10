@@ -9,12 +9,15 @@ services:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - FAP_USERNAME=${FAP_USERNAME}
       - FAP_PASSWORD=${FAP_PASSWORD}
+      - FAP_STUDENT_ID=${FAP_STUDENT_ID}
+      - FAP_CAMPUS=${FAP_CAMPUS:-4}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - FLARESOLVERR_URL=http://flaresolverr:8191/v1
       - DATABASE_PATH=data/fap.db
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-Asia/Ho_Chi_Minh}
       - DEFAULT_CHANNEL_ID=${DEFAULT_CHANNEL_ID}
+      - HEADLESS=true
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

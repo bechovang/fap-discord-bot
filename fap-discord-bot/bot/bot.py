@@ -19,7 +19,8 @@ from bot.commands.status import setup as setup_status, StatusCommands
 from bot.commands.exam import setup as setup_exam
 from bot.commands.attendance import setup as setup_attendance
 from bot.commands.grade import setup as setup_grade
-# from bot.commands.pending_checks import setup as setup_pending_checks  # TODO: Conflicting commands - needs refactoring
+from bot.commands.config import setup as setup_config
+from bot.scheduler import FAPScheduler
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +49,7 @@ class FAPBot(commands.Bot):
 
         # Auth instance will be created when needed
         self.status_cog: StatusCommands = None
+        self.scheduler: FAPScheduler = None
 
     async def setup_hook(self):
         """Initialize bot components"""
@@ -91,12 +93,16 @@ class FAPBot(commands.Bot):
         await setup_exam(self)
         await setup_attendance(self)
         await setup_grade(self)
-        # await setup_pending_checks(self)  # TODO: Conflicting commands - needs refactoring
+        await setup_config(self)
 
         # Set auth reference in status cog
         self.status_cog = self.get_cog('StatusCommands')
         if self.status_cog:
             self.status_cog.set_auth(self.auth)
+
+        # Start background scheduler
+        self.scheduler = FAPScheduler(self, self.auth)
+        self.scheduler.start()
 
         logger.info("Bot setup complete")
 
@@ -145,6 +151,8 @@ class FAPBot(commands.Bot):
     async def close(self):
         """Cleanup on shutdown"""
         logger.info("Shutting down...")
+        if self.scheduler:
+            self.scheduler.stop()
         if self.auth:
             await self.auth.close()
         await super().close()

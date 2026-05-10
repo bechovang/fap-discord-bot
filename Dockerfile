@@ -45,4 +45,4 @@ RUN mkdir -p data logs
 ENV PYTHONPATH=/app
 
 # Run the bot
-CMD ["python", "-m", "src.bot"]
+CMD ["python", "fap-discord-bot/main.py"]
