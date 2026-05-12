@@ -200,20 +200,19 @@ class FlareSolverrLogin:
         if feid_fields:
             logger.info(f"Found FeID form fields: {list(feid_fields.keys())}")
 
-            # Only send credentials - let FlareSolverr's request.post handle
-            # CSRF tokens and hidden fields from the fresh page load.
-            # Including old __RequestVerificationToken would cause validation failure.
+            # Send all hidden fields + credentials.
+            # FlareSolverr request.post builds a data:text/html form and submits it,
+            # so we must include ALL form fields including __RequestVerificationToken.
             feid_form = {}
-            # Include ProjectId/ProjectCode but NOT __RequestVerificationToken
-            for key, val in feid_fields.get("hidden", {}).items():
-                if key not in ("__RequestVerificationToken", "ReturnUrl"):
-                    feid_form[key] = val
+            feid_form.update(feid_fields.get("hidden", {}))
             feid_form[feid_fields["username_field"]] = feid
             feid_form[feid_fields["password_field"]] = password
 
             feid_action_url = feid_fields.get("action_url") or url
 
             logger.info(f"POSTing credentials to {feid_action_url}")
+            logger.info(f"Form fields: {list(feid_form.keys())}")
+            logger.info(f"Hidden fields from FeID: {list(feid_fields.get('hidden', {}).keys())}")
 
             result = self._request({
                 "cmd": "request.post",
