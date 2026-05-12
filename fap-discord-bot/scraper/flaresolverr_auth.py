@@ -350,8 +350,11 @@ class FAPFlareSolverrAuth:
             logger.info(f"FlareSolverr page status: {page_status}, url: {url}, cookies: {len(cookies)}")
 
             if not cookies:
-                logger.warning("FlareSolverr returned no cookies in solution")
-                return False
+                logger.info("No cookies returned (Cloudflare not challenged or no auth). Saving empty cookie list.")
+                self.cookies_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.cookies_file, "w", encoding="utf-8") as f:
+                    json.dump([], f, indent=2)
+                return True
 
             cf_clearance = next((c for c in cookies if c.get("name") == "cf_clearance"), None)
             if cf_clearance:

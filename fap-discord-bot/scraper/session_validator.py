@@ -121,15 +121,10 @@ class SessionValidator:
             else:
                 logger.warning("FlareSolverr-first refresh failed, trying Playwright fallback...")
 
-        try:
-            success = await self._refresh_with_playwright(use_headless)
-            if success:
-                logger.info("Session refreshed successfully via Playwright")
-                return True
-        except asyncio.TimeoutError:
-            logger.error("Session refresh timed out after 120s")
-        except Exception as e:
-            logger.error(f"Session refresh error: {e}")
+        success = await self._refresh_with_playwright(use_headless)
+        if success:
+            logger.info("Session refreshed successfully via Playwright")
+            return True
 
         if prefer_flaresolverr:
             logger.warning("Playwright fallback failed after FlareSolverr-first strategy.")
@@ -147,13 +142,23 @@ class SessionValidator:
 
     async def _refresh_with_playwright(self, use_headless: bool) -> bool:
         """Attempt a Playwright-based refresh."""
-        auth = FAPAutoLogin(
-            headless=use_headless,
-            feid=self.feid,
-            password=self.password,
-            interactive=False,
-        )
-        return await asyncio.wait_for(auth.auto_login(), timeout=180)
+        logger.info(f"Starting Playwright FEID login (headless={use_headless})...")
+        try:
+            auth = FAPAutoLogin(
+                headless=use_headless,
+                feid=self.feid,
+                password=self.password,
+                interactive=False,
+            )
+            result = await asyncio.wait_for(auth.auto_login(), timeout=180)
+            logger.info(f"Playwright FEID login result: {result}")
+            return result
+        except asyncio.TimeoutError:
+            logger.error("Playwright FEID login timed out after 180s")
+            return False
+        except Exception as e:
+            logger.error(f"Playwright FEID login error: {e}", exc_info=True)
+            return False
 
     async def _wait_for_flaresolverr(self, timeout: int = 60) -> bool:
         """Wait for FlareSolverr to become ready (handles startup race condition)."""
