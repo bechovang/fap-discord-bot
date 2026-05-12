@@ -107,7 +107,7 @@ class FAPAutoLogin:
         old_cookies_path = self.profile_dir / "Default" / "Cookies"
         profile_exists = cookies_path.exists() or old_cookies_path.exists()
 
-        self._browser = await self._playwright.chromium.launch_persistent_context(
+        launch_opts = dict(
             user_data_dir=str(self.profile_dir),
             headless=self.headless,
             args=[
@@ -116,6 +116,19 @@ class FAPAutoLogin:
             ],
             viewport={"width": 1920, "height": 1080},
         )
+
+        proxy_url = os.environ.get("PROXY_URL")
+        if proxy_url:
+            print(f"[.] Using proxy: {proxy_url.split('@')[-1]}")
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            launch_opts["proxy"] = {
+                "server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}",
+                "username": parsed.username or "",
+                "password": parsed.password or "",
+            }
+
+        self._browser = await self._playwright.chromium.launch_persistent_context(**launch_opts)
 
         if self._browser.pages:
             self._page = self._browser.pages[0]
