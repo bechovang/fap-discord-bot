@@ -10,6 +10,7 @@ Uses FlareSolverr's request.get / request.post to automate the full login flow:
 6. Follow redirects back to FAP authenticated
 7. Save cookies for aiohttp
 """
+import html as html_module
 import json
 import logging
 import os
@@ -205,7 +206,7 @@ class FlareSolverrLogin:
             feid_form[feid_fields["username_field"]] = feid
             feid_form[feid_fields["password_field"]] = password
 
-            feid_action_url = feid_fields.get("action_url", url)
+            feid_action_url = feid_fields.get("action_url") or url
 
             logger.info(f"POSTing credentials to {feid_action_url}")
 
@@ -264,20 +265,21 @@ class FlareSolverrLogin:
 
     def _extract_feid_form_fields(self, html: str) -> Optional[dict]:
         """Extract form fields from the FeID login page."""
-        # Find the form
+        # Find the form - try with action first, then without
         form_match = re.search(
             r'<form[^>]*action="([^"]*)"[^>]*>(.*?)</form>',
             html,
             re.DOTALL | re.IGNORECASE,
         )
-        if not form_match:
-            # Try finding any form
+        if form_match:
+            action_url = form_match.group(1)
+            form_html = form_match.group(0)
+        else:
             form_match = re.search(
                 r'<form[^>]*>(.*?)</form>', html, re.DOTALL | re.IGNORECASE
             )
-
-        form_html = form_match.group(0) if form_match else html
-        action_url = form_match.group(1) if form_match else ""
+            form_html = form_match.group(0) if form_match else html
+            action_url = ""  # Empty = submit to current URL
 
         # Find username input
         username_field = None
@@ -327,9 +329,12 @@ class FlareSolverrLogin:
             name_match = re.search(r'name="([^"]*)"', input_tag)
             value_match = re.search(r'value="([^"]*)"', input_tag)
             if name_match:
-                hidden_fields[name_match.group(1)] = (
-                    value_match.group(1) if value_match else ""
-                )
+                raw_value = value_match.group(1) if value_match else ""
+                hidden_fields[name_match.group(1)] = html_module.unescape(raw_value)
+
+        # Decode HTML entities in action URL
+        if action_url:
+            action_url = html_module.unescape(action_url)
 
         return {
             "username_field": username_field,
