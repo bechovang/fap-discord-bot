@@ -3,11 +3,14 @@ FAP Authentication - FlareSolverr
 Uses FlareSolverr proxy to bypass Cloudflare challenges
 """
 import asyncio
+import logging
 import os
 import requests
 import json
 from pathlib import Path
 from typing import Optional, Dict, List
+
+logger = logging.getLogger(__name__)
 
 
 class FAPFlareSolverrAuth:
@@ -317,6 +320,7 @@ class FAPFlareSolverrAuth:
         # Create session and fetch FAP to bypass Cloudflare
         if not self._session_created:
             if not self.create_session():
+                logger.error("FlareSolverr session creation failed")
                 return False
 
         payload = {
@@ -328,31 +332,38 @@ class FAPFlareSolverrAuth:
         }
 
         try:
-            print("[.] FlareSolverr: fetching FAP to get Cloudflare cookies...")
+            logger.info("FlareSolverr: fetching FAP to get Cloudflare cookies...")
             result = self._request(payload)
 
-            if result.get("status") != "ok":
-                print(f"[!] FlareSolverr error: {result.get('message')}")
+            status = result.get("status")
+            logger.info(f"FlareSolverr response status: {status}")
+
+            if status != "ok":
+                logger.error(f"FlareSolverr error: {result.get('message')}")
                 return False
 
             solution = result.get("solution", {})
             cookies = solution.get("cookies", [])
+            page_status = solution.get("status")
+            url = solution.get("url", "")
+
+            logger.info(f"FlareSolverr page status: {page_status}, url: {url}, cookies: {len(cookies)}")
 
             if not cookies:
-                print("[!] FlareSolverr returned no cookies")
+                logger.warning("FlareSolverr returned no cookies in solution")
                 return False
 
             cf_clearance = next((c for c in cookies if c.get("name") == "cf_clearance"), None)
             if cf_clearance:
-                print(f"[+] cf_clearance obtained (Cloudflare bypassed)")
+                logger.info("cf_clearance obtained (Cloudflare bypassed)")
             else:
-                print("[.] No cf_clearance cookie, saving anyway")
+                logger.info("No cf_clearance cookie, saving anyway")
 
-            print(f"[+] Got {len(cookies)} cookies from FlareSolverr")
+            logger.info(f"Got {len(cookies)} cookies from FlareSolverr")
             return self.save_cookies(cookies)
 
         except Exception as e:
-            print(f"[!] FlareSolverr refresh failed: {e}")
+            logger.error(f"FlareSolverr refresh_cookies failed: {e}", exc_info=True)
             return False
 
 
