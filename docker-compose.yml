@@ -13,11 +13,15 @@ services:
       - FAP_CAMPUS=${FAP_CAMPUS:-4}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - FLARESOLVERR_URL=http://flaresolverr:8191/v1
+      - PREFER_FLARESOLVERR_REFRESH=${PREFER_FLARESOLVERR_REFRESH:-true}
+      - FLARESOLVERR_MAX_TIMEOUT_MS=${FLARESOLVERR_MAX_TIMEOUT_MS:-180000}
+      - FLARESOLVERR_WAIT_SECONDS=${FLARESOLVERR_WAIT_SECONDS:-5}
+      - FLARESOLVERR_REQUEST_TIMEOUT_SECONDS=${FLARESOLVERR_REQUEST_TIMEOUT_SECONDS:-240}
       - DATABASE_PATH=data/fap.db
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-Asia/Ho_Chi_Minh}
       - DEFAULT_CHANNEL_ID=${DEFAULT_CHANNEL_ID}
-      - HEADLESS=true
+      - HEADLESS=false
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -34,7 +38,9 @@ services:
       - "8191:8191"
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - HEADLESS=true
+      - HEADLESS=false
+      - DISPLAY=:99
+    entrypoint: ["/bin/sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & sleep 1 && /usr/bin/dumb-init -- /usr/local/bin/python -u /app/flaresolverr.py"]
     networks:
       - bot-network
 

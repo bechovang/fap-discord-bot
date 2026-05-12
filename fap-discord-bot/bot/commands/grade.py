@@ -317,6 +317,11 @@ class GradeCommands(commands.GroupCog, name="grade"):
 
     async def _get_auth(self) -> FAPAuth:
         """Get or create auth instance"""
+        shared_auth = getattr(self.bot, 'auth', None)
+        if shared_auth:
+            self.auth = shared_auth
+            return self.auth
+
         if self.auth is None:
             from dotenv import load_dotenv
             load_dotenv()
@@ -362,7 +367,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
             )
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch grades. Please try again later.", ephemeral=True)
+                await interaction.followup.send(f"❌ {auth.format_last_failure('grades')}", ephemeral=True)
                 return
 
             # If term and course specified, show direct results
@@ -452,7 +457,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
             )
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch grades. Please try again later.", ephemeral=True)
+                await interaction.followup.send(f"❌ {auth.format_last_failure('grades')}", ephemeral=True)
                 return
 
             logger.info(f"Base page HTML length: {len(html)} chars")
@@ -629,7 +634,7 @@ class GradeCommands(commands.GroupCog, name="grade"):
             )
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch grades. Please try again later.", ephemeral=True)
+                await interaction.followup.send(f"❌ {auth.format_last_failure('grades')}", ephemeral=True)
                 return
 
             logger.info(f"Base page HTML length: {len(html)} chars")

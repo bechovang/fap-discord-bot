@@ -34,6 +34,11 @@ class ExamCommands(commands.GroupCog, name="exam"):
 
     async def _get_auth(self) -> FAPAuth:
         """Get or create auth instance"""
+        shared_auth = getattr(self.bot, 'auth', None)
+        if shared_auth:
+            self.auth = shared_auth
+            return self.auth
+
         if self.auth is None:
             from dotenv import load_dotenv
             import os
@@ -57,7 +62,7 @@ class ExamCommands(commands.GroupCog, name="exam"):
             html = await auth.fetch_exam_schedule()
 
             if not html:
-                await interaction.followup.send("Failed to fetch exam schedule. Please try again.")
+                await interaction.followup.send(f"❌ {auth.format_last_failure('exam schedule')}")
                 return
 
             # Parse exams
@@ -101,7 +106,7 @@ class ExamCommands(commands.GroupCog, name="exam"):
             html = await auth.fetch_exam_schedule()
 
             if not html:
-                await interaction.followup.send("Failed to fetch exam schedule.")
+                await interaction.followup.send(f"❌ {auth.format_last_failure('exam schedule')}")
                 return
 
             exams = self.parser.parse_exam_schedule(html)

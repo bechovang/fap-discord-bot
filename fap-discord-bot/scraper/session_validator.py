@@ -6,7 +6,6 @@ import json
 import logging
 import asyncio
 from pathlib import Path
-from playwright.async_api import async_playwright
 from .auto_login_feid import FAPAutoLogin
 from .flaresolverr_auth import FAPFlareSolverrAuth
 
@@ -103,26 +102,48 @@ class SessionValidator:
             return False
 
         logger.info("Refreshing FAP session...")
+        use_headless = headless if headless is not None else os.getenv("HEADLESS", "false").lower() == "true"
+        prefer_flaresolverr = self._should_prefer_flaresolverr(use_headless)
+
+        if prefer_flaresolverr:
+            logger.info("Refresh strategy: FlareSolverr-first")
+            if await self._refresh_with_flaresolverr():
+                return True
+            logger.warning("FlareSolverr-first refresh failed, trying Playwright fallback...")
 
         try:
-            use_headless = headless if headless is not None else os.getenv("HEADLESS", "false").lower() == "true"
-            auth = FAPAutoLogin(headless=use_headless, feid=self.feid, password=self.password)
-            success = await asyncio.wait_for(auth.auto_login(), timeout=120)
-
+            success = await self._refresh_with_playwright(use_headless)
             if success:
-                logger.info("Session refreshed successfully")
+                logger.info("Session refreshed successfully via Playwright")
                 return True
-
-            logger.warning("Playwright refresh failed, trying FlareSolverr fallback...")
-            return await self._refresh_with_flaresolverr()
-
         except asyncio.TimeoutError:
             logger.error("Session refresh timed out after 120s")
-            return await self._refresh_with_flaresolverr()
         except Exception as e:
             logger.error(f"Session refresh error: {e}")
-            logger.warning("Trying FlareSolverr fallback after Playwright refresh error...")
-            return await self._refresh_with_flaresolverr()
+
+        if prefer_flaresolverr:
+            logger.warning("Playwright fallback failed after FlareSolverr-first strategy.")
+            return False
+
+        logger.warning("Playwright refresh failed, trying FlareSolverr fallback...")
+        return await self._refresh_with_flaresolverr()
+
+    def _should_prefer_flaresolverr(self, use_headless: bool) -> bool:
+        """Prefer FlareSolverr in unattended server environments."""
+        env_value = os.getenv("PREFER_FLARESOLVERR_REFRESH")
+        if env_value is not None:
+            return env_value.lower() == "true"
+        return use_headless and bool(os.getenv("FLARESOLVERR_URL"))
+
+    async def _refresh_with_playwright(self, use_headless: bool) -> bool:
+        """Attempt a Playwright-based refresh."""
+        auth = FAPAutoLogin(
+            headless=use_headless,
+            feid=self.feid,
+            password=self.password,
+            interactive=not use_headless,
+        )
+        return await asyncio.wait_for(auth.auto_login(), timeout=120)
 
     async def _refresh_with_flaresolverr(self) -> bool:
         """

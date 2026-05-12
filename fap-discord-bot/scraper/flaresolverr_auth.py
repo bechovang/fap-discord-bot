@@ -32,6 +32,9 @@ class FAPFlareSolverrAuth:
         self._session_created = False
         self.data_dir = Path(data_dir)
         self.cookies_file = self.data_dir / "fap_cookies.json"
+        self.max_timeout_ms = int(os.getenv("FLARESOLVERR_MAX_TIMEOUT_MS", "180000"))
+        self.wait_seconds = int(os.getenv("FLARESOLVERR_WAIT_SECONDS", "5"))
+        self.request_timeout_seconds = int(os.getenv("FLARESOLVERR_REQUEST_TIMEOUT_SECONDS", "240"))
 
     def _request(self, payload: dict) -> dict:
         """Send request to FlareSolverr API"""
@@ -42,7 +45,7 @@ class FAPFlareSolverrAuth:
                 self.flaresolverr_url,
                 headers=headers,
                 json=payload,
-                timeout=120  # 2 minutes timeout for Cloudflare solving
+                timeout=self.request_timeout_seconds
             )
             response.raise_for_status()
             return response.json()
@@ -58,6 +61,12 @@ class FAPFlareSolverrAuth:
     def create_session(self) -> bool:
         """Create a persistent browser session (maintains cookies)"""
         print(f"[.] Creating FlareSolverr session: {self.session_id}")
+
+        existing_sessions = self.list_sessions()
+        if self.session_id in existing_sessions:
+            print(f"[.] Reusing existing session id requires cleanup first: {self.session_id}")
+            self._session_created = True
+            self.destroy_session()
 
         payload = {
             "cmd": "sessions.create",
@@ -132,8 +141,8 @@ class FAPFlareSolverrAuth:
             "cmd": "request.get",
             "url": url,
             "session": self.session_id,
-            "maxTimeout": 60000,  # 60 seconds
-            "waitInSeconds": 3,   # Wait for dynamic content
+            "maxTimeout": self.max_timeout_ms,
+            "waitInSeconds": self.wait_seconds,
         }
 
         try:
@@ -274,7 +283,7 @@ class FAPFlareSolverrAuth:
             "cmd": "request.get",
             "url": self.SCHEDULE_URL,
             "session": self.session_id,
-            "maxTimeout": 60000,
+            "maxTimeout": self.max_timeout_ms,
             "returnOnlyCookies": True,  # Only return cookies, not full HTML
         }
 

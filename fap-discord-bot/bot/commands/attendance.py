@@ -201,6 +201,11 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
 
     async def _get_auth(self) -> FAPAuth:
         """Get or create auth instance"""
+        shared_auth = getattr(self.bot, 'auth', None)
+        if shared_auth:
+            self.auth = shared_auth
+            return self.auth
+
         if self.auth is None:
             from dotenv import load_dotenv
             load_dotenv()
@@ -239,7 +244,7 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
             )
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch attendance. Please try again later.")
+                await interaction.followup.send(f"❌ {auth.format_last_failure('attendance')}")
                 return
 
             # If term and course specified, show direct results
@@ -294,7 +299,7 @@ class AttendanceCommands(commands.GroupCog, name="attendance"):
             )
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch attendance. Please try again later.")
+                await interaction.followup.send(f"❌ {auth.format_last_failure('attendance')}")
                 return
 
             # Extract courses from the default page

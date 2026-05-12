@@ -34,6 +34,11 @@ class ScheduleCommands(commands.GroupCog, name="schedule"):
 
     async def _get_auth(self) -> FAPAuth:
         """Get or create auth instance"""
+        shared_auth = getattr(self.bot, 'auth', None)
+        if shared_auth:
+            self.auth = shared_auth
+            return self.auth
+
         if self.auth is None:
             from dotenv import load_dotenv
             import os
@@ -57,7 +62,7 @@ class ScheduleCommands(commands.GroupCog, name="schedule"):
             html = await auth.fetch_schedule()
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch schedule. Please try again later.")
+                await interaction.followup.send(f"❌ {auth.format_last_failure('schedule')}")
                 return
 
             items = self.parser.parse_schedule(html)
@@ -97,7 +102,7 @@ class ScheduleCommands(commands.GroupCog, name="schedule"):
             html = await auth.fetch_schedule(week=week, year=year)
 
             if not html:
-                await interaction.followup.send("❌ Failed to fetch schedule. Please try again later.")
+                await interaction.followup.send(f"❌ {auth.format_last_failure('schedule')}")
                 return
 
             items = self.parser.parse_schedule(html)

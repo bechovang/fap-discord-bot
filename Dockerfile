@@ -3,14 +3,11 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies + Xvfb for virtual display
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Playwright browsers
-RUN apt-get update && apt-get install -y \
+    xvfb \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -24,6 +21,10 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libgbm1 \
     libasound2 \
+    libx11-xcb1 \
+    libxcursor1 \
+    libxi6 \
+    libxtst6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
@@ -44,5 +45,6 @@ RUN mkdir -p data logs
 # Set Python path
 ENV PYTHONPATH=/app
 
-# Run the bot
-CMD ["python", "fap-discord-bot/main.py"]
+# Run the bot inside Xvfb virtual display (Chromium needs a display)
+ENV DISPLAY=:99
+CMD ["xvfb-run", "--server-args=-screen 0 1280x720x24", "python", "fap-discord-bot/main.py"]
