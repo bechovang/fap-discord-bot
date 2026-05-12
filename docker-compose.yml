@@ -22,6 +22,7 @@ services:
       - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-Asia/Ho_Chi_Minh}
       - DEFAULT_CHANNEL_ID=${DEFAULT_CHANNEL_ID}
       - HEADLESS=false
+      - PROXY_URL=${PROXY_URL}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -40,6 +41,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - HEADLESS=false
       - DISPLAY=:99
+      - PROXY_URL=${PROXY_URL}
     entrypoint: ["/bin/sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & sleep 1 && /usr/bin/dumb-init -- /usr/local/bin/python -u /app/flaresolverr.py"]
     networks:
       - bot-network

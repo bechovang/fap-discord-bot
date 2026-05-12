@@ -21,6 +21,7 @@ class SessionValidator:
         self.data_dir = Path(data_dir)
         self.cookies_file = self.data_dir / "fap_cookies.json"
         self.profile_dir = self.data_dir / "chrome_profile"
+        self._flaresolverr_ready = False
 
     def is_session_valid(self) -> bool:
         """Check if session files exist"""
@@ -154,6 +155,39 @@ class SessionValidator:
         )
         return await asyncio.wait_for(auth.auto_login(), timeout=180)
 
+    async def _wait_for_flaresolverr(self, timeout: int = 60) -> bool:
+        """Wait for FlareSolverr to become ready (handles startup race condition)."""
+        if self._flaresolverr_ready:
+            return True
+
+        flaresolverr_url = os.getenv("FLARESOLVERR_URL")
+        if not flaresolverr_url:
+            return False
+
+        import aiohttp
+        logger.info(f"Waiting for FlareSolverr at {flaresolverr_url}...")
+        deadline = asyncio.get_event_loop().time() + timeout
+
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=3),
+                ) as session:
+                    async with session.post(
+                        flaresolverr_url,
+                        json={"cmd": "sessions.list"},
+                    ) as resp:
+                        if resp.status == 200:
+                            self._flaresolverr_ready = True
+                            logger.info("FlareSolverr is ready")
+                            return True
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+
+        logger.warning(f"FlareSolverr not ready after {timeout}s")
+        return False
+
     async def _refresh_with_flaresolverr(self) -> bool:
         """
         Fall back to FlareSolverr when the direct Playwright login flow is
@@ -164,7 +198,10 @@ class SessionValidator:
             logger.warning("FlareSolverr fallback skipped - FLARESOLVERR_URL is not configured")
             return False
 
-        logger.info(f"Trying FlareSolverr fallback via {flaresolverr_url}")
+        if not await self._wait_for_flaresolverr():
+            return False
+
+        logger.info(f"Trying FlareSolverr via {flaresolverr_url}")
 
         def _run_flaresolverr_refresh() -> bool:
             auth = FAPFlareSolverrAuth(
