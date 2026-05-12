@@ -42,7 +42,21 @@ services:
       - HEADLESS=false
       - DISPLAY=:99
       - PROXY_URL=${PROXY_URL}
-    entrypoint: ["/bin/sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & sleep 1 && /usr/bin/dumb-init -- /usr/local/bin/python -u /app/flaresolverr.py"]
+    entrypoint: ["/bin/sh", "-c", "apt-get update && apt-get install -y x11vnc > /dev/null 2>&1; Xvfb :99 -screen 0 1280x720x24 & sleep 1; x11vnc -display :99 -forever -nopw -shared -rfbport 5900 & /usr/bin/dumb-init -- /usr/local/bin/python -u /app/flaresolverr.py"]
+    networks:
+      - bot-network
+
+  novnc:
+    image: theasp/novnc:latest
+    container_name: novnc
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - REMOTE_HOST=flaresolverr
+      - REMOTE_PORT=5900
+    depends_on:
+      - flaresolverr
     networks:
       - bot-network
 

@@ -220,17 +220,18 @@ class FAPFlareSolverrAuth:
 
     def login_with_session(self) -> bool:
         """
-        Interactive login using FlareSolverr session
+        Interactive login using FlareSolverr session.
 
-        This requires FlareSolverr to run in non-headless mode (HEADLESS=false)
-        User will complete Google login in the visible browser window
+        Requires FlareSolverr with HEADLESS=false and VNC access.
+        Open http://<server>:8080 in browser to see the FlareSolverr desktop,
+        then complete the FeID login when the FAP page loads.
         """
         print("=" * 60)
         print("FAP Login via FlareSolverr")
         print("=" * 60)
         print()
-        print("[!] This requires FlareSolverr with HEADLESS=false")
-        print("[!] Restart FlareSolverr: docker run -e HEADLESS=false -p 8191:8191 flaresolverr/flaresolverr")
+        print("[.] Open VNC in browser: http://localhost:8080")
+        print("[.] Complete the FeID login in the browser window")
         print()
 
         if not self._session_created:
