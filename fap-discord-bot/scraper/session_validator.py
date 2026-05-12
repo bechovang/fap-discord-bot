@@ -107,9 +107,18 @@ class SessionValidator:
 
         if prefer_flaresolverr:
             logger.info("Refresh strategy: FlareSolverr-first")
-            if await self._refresh_with_flaresolverr():
-                return True
-            logger.warning("FlareSolverr-first refresh failed, trying Playwright fallback...")
+            flaresolverr_ok = await self._refresh_with_flaresolverr()
+            if flaresolverr_ok:
+                logger.info("FlareSolverr obtained Cloudflare cookies, attempting FEID login via Playwright...")
+                try:
+                    success = await self._refresh_with_playwright(use_headless)
+                    if success:
+                        logger.info("Session refreshed successfully (FlareSolverr + Playwright FEID login)")
+                        return True
+                except Exception as e:
+                    logger.error(f"Playwright FEID login failed after FlareSolverr: {e}")
+            else:
+                logger.warning("FlareSolverr-first refresh failed, trying Playwright fallback...")
 
         try:
             success = await self._refresh_with_playwright(use_headless)
@@ -141,9 +150,9 @@ class SessionValidator:
             headless=use_headless,
             feid=self.feid,
             password=self.password,
-            interactive=not use_headless,
+            interactive=False,
         )
-        return await asyncio.wait_for(auth.auto_login(), timeout=120)
+        return await asyncio.wait_for(auth.auto_login(), timeout=180)
 
     async def _refresh_with_flaresolverr(self) -> bool:
         """

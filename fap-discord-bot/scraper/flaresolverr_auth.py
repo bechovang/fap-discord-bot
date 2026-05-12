@@ -308,25 +308,52 @@ class FAPFlareSolverrAuth:
 
     def refresh_cookies(self) -> bool:
         """
-        Refresh the shared cookie jar using an existing FlareSolverr session.
+        Refresh the shared cookie jar using FlareSolverr.
 
-        This is useful as a fallback when the Playwright login flow is blocked
-        by Cloudflare but a FlareSolverr session is already authenticated.
+        Strategy: FlareSolverr bypasses Cloudflare and returns cf_clearance
+        cookies. We save these cookies so Playwright can reuse them for the
+        actual FEID login (which Playwright handles better than FlareSolverr).
         """
-        html = self.fetch_schedule()
-        if not html:
-            return False
+        # Create session and fetch FAP to bypass Cloudflare
+        if not self._session_created:
+            if not self.create_session():
+                return False
 
-        if 'ctl00_mainContent_drpSelectWeek' not in html:
-            print("[!] FlareSolverr session did not return an authenticated schedule page")
-            return False
+        payload = {
+            "cmd": "request.get",
+            "url": self.SCHEDULE_URL,
+            "session": self.session_id,
+            "maxTimeout": self.max_timeout_ms,
+            "waitInSeconds": self.wait_seconds,
+        }
 
-        cookies = self.get_cookies()
-        if not cookies:
-            print("[!] FlareSolverr returned no cookies to persist")
-            return False
+        try:
+            print("[.] FlareSolverr: fetching FAP to get Cloudflare cookies...")
+            result = self._request(payload)
 
-        return self.save_cookies(cookies)
+            if result.get("status") != "ok":
+                print(f"[!] FlareSolverr error: {result.get('message')}")
+                return False
+
+            solution = result.get("solution", {})
+            cookies = solution.get("cookies", [])
+
+            if not cookies:
+                print("[!] FlareSolverr returned no cookies")
+                return False
+
+            cf_clearance = next((c for c in cookies if c.get("name") == "cf_clearance"), None)
+            if cf_clearance:
+                print(f"[+] cf_clearance obtained (Cloudflare bypassed)")
+            else:
+                print("[.] No cf_clearance cookie, saving anyway")
+
+            print(f"[+] Got {len(cookies)} cookies from FlareSolverr")
+            return self.save_cookies(cookies)
+
+        except Exception as e:
+            print(f"[!] FlareSolverr refresh failed: {e}")
+            return False
 
 
 # Standalone functions
