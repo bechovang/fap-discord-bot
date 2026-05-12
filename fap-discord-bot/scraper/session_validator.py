@@ -7,6 +7,7 @@ import logging
 import asyncio
 from pathlib import Path
 from .flaresolverr_auth import FAPFlareSolverrAuth
+from .flaresolverr_login import FlareSolverrLogin
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +83,10 @@ class SessionValidator:
 
     async def refresh_session(self, headless: bool = None) -> bool:
         """
-        Refresh session via FlareSolverr.
+        Refresh session via FlareSolverr with auto-login.
 
-        Returns True if FlareSolverr session is authenticated and cookies saved.
-        Returns False if FlareSolverr session is not authenticated (needs manual login).
+        First tries refresh_cookies (no login). If session is not authenticated,
+        attempts automated FeID login via FlareSolverr API.
         """
         logger.info("Refreshing FAP session via FlareSolverr...")
 
@@ -94,10 +95,17 @@ class SessionValidator:
             logger.info("Session refreshed successfully via FlareSolverr")
             return True
 
+        # Session not authenticated - try auto-login
+        if self.feid and self.password:
+            logger.info("Session not authenticated, attempting automated FeID login...")
+            login_success = await self._auto_login()
+            if login_success:
+                logger.info("Auto-login succeeded!")
+                return True
+
         logger.warning(
-            "FlareSolverr session is not authenticated. "
-            "Manual login required: restart FlareSolverr with HEADLESS=false "
-            "and run `python -m scraper.flaresolverr_auth login`"
+            "FlareSolverr session not authenticated and auto-login failed. "
+            "Check FEID credentials."
         )
         return False
 
@@ -165,6 +173,39 @@ class SessionValidator:
 
         logger.warning("FlareSolverr session not authenticated (needs manual login)")
         return False
+
+    async def _auto_login(self) -> bool:
+        """Attempt automated FeID login via FlareSolverr API."""
+        flaresolverr_url = os.getenv("FLARESOLVERR_URL")
+        if not flaresolverr_url:
+            logger.error("FLARESOLVERR_URL is not configured")
+            return False
+
+        campus = os.getenv("FAP_CAMPUS", "4")
+
+        def _run_login() -> bool:
+            login = FlareSolverrLogin(
+                flaresolverr_url=flaresolverr_url,
+                data_dir=str(self.data_dir),
+            )
+            return login.login(
+                feid=self.feid,
+                password=self.password,
+                campus=campus,
+            )
+
+        try:
+            success = await asyncio.to_thread(_run_login)
+        except Exception as e:
+            logger.error(f"Auto-login error: {e}", exc_info=True)
+            return False
+
+        if success:
+            logger.info("Auto-login succeeded, cookies saved")
+        else:
+            logger.warning("Auto-login failed")
+
+        return success
 
     async def get_valid_session(self) -> bool:
         """
