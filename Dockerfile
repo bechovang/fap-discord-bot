@@ -47,4 +47,4 @@ ENV PYTHONPATH=/app
 
 # Run the bot inside Xvfb virtual display (Chromium needs a display)
 ENV DISPLAY=:99
-CMD ["xvfb-run", "--server-args=-screen 0 1280x720x24", "python", "fap-discord-bot/main.py"]
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & sleep 1 && exec python fap-discord-bot/main.py"]
