@@ -200,9 +200,14 @@ class FlareSolverrLogin:
         if feid_fields:
             logger.info(f"Found FeID form fields: {list(feid_fields.keys())}")
 
-            # Build form data with FeID credentials
+            # Only send credentials - let FlareSolverr's request.post handle
+            # CSRF tokens and hidden fields from the fresh page load.
+            # Including old __RequestVerificationToken would cause validation failure.
             feid_form = {}
-            feid_form.update(feid_fields.get("hidden", {}))
+            # Include ProjectId/ProjectCode but NOT __RequestVerificationToken
+            for key, val in feid_fields.get("hidden", {}).items():
+                if key not in ("__RequestVerificationToken", "ReturnUrl"):
+                    feid_form[key] = val
             feid_form[feid_fields["username_field"]] = feid
             feid_form[feid_fields["password_field"]] = password
 
