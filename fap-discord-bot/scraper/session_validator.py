@@ -1,37 +1,32 @@
 """
-Session Validator - Check and auto-refresh FAP session
+Session Validator - Check and auto-refresh FAP session via FlareSolverr
 """
 import os
 import json
 import logging
 import asyncio
 from pathlib import Path
-from .auto_login_feid import FAPAutoLogin
 from .flaresolverr_auth import FAPFlareSolverrAuth
 
 logger = logging.getLogger(__name__)
 
 
 class SessionValidator:
-    """Validate and refresh FAP session automatically"""
+    """Validate and refresh FAP session via FlareSolverr"""
 
     def __init__(self, feid: str = None, password: str = None, data_dir: str = "data"):
         self.feid = feid or os.environ.get("FAP_FEID")
         self.password = password or os.environ.get("FAP_PASSWORD")
         self.data_dir = Path(data_dir)
         self.cookies_file = self.data_dir / "fap_cookies.json"
-        self.profile_dir = self.data_dir / "chrome_profile"
         self._flaresolverr_ready = False
 
     def is_session_valid(self) -> bool:
-        """Check if session files exist"""
-        return self.cookies_file.exists() and self.profile_dir.exists()
+        """Check if cookies file exists"""
+        return self.cookies_file.exists()
 
     def is_session_fresh(self, max_age_hours: int = 2) -> bool:
-        """
-        Fast check: verify cookies file is recent (within max_age_hours)
-        This avoids launching Chrome just to check session validity
-        """
+        """Check if cookies file is recent (within max_age_hours)"""
         if not self.cookies_file.exists():
             return False
 
@@ -44,23 +39,20 @@ class SessionValidator:
         Check if current session is actually working
 
         Args:
-            fast_check: If True, only check file age (no browser launch)
+            fast_check: If True, only check file age (no HTTP request)
 
         Returns:
             True if session can access FAP, False otherwise
         """
-        if not self.is_session_valid():
+        if not self.cookies_file.exists():
             return False
 
-        # Fast check: just verify cookies are recent (within 2 hours)
         if fast_check:
             return self.is_session_fresh(max_age_hours=2)
 
-        # Full check: use aiohttp to verify session cookies work
         try:
             import aiohttp
-            cookies_file = self.data_dir / "fap_cookies.json"
-            with open(cookies_file, 'r') as f:
+            with open(self.cookies_file, 'r') as f:
                 cookies_list = json.load(f)
             cookies = {c['name']: c['value'] for c in cookies_list if 'fpt.edu.vn' in c.get('domain', '')}
 
@@ -90,75 +82,24 @@ class SessionValidator:
 
     async def refresh_session(self, headless: bool = None) -> bool:
         """
-        Refresh session by re-login
+        Refresh session via FlareSolverr.
 
-        Args:
-            headless: Run browser in headless mode
-
-        Returns:
-            True if refresh successful, False otherwise
+        Returns True if FlareSolverr session is authenticated and cookies saved.
+        Returns False if FlareSolverr session is not authenticated (needs manual login).
         """
-        if not self.feid or not self.password:
-            logger.error("Cannot refresh - missing credentials")
-            return False
+        logger.info("Refreshing FAP session via FlareSolverr...")
 
-        logger.info("Refreshing FAP session...")
-        use_headless = headless if headless is not None else os.getenv("HEADLESS", "false").lower() == "true"
-        prefer_flaresolverr = self._should_prefer_flaresolverr(use_headless)
-
-        if prefer_flaresolverr:
-            logger.info("Refresh strategy: FlareSolverr-first")
-            flaresolverr_ok = await self._refresh_with_flaresolverr()
-            if flaresolverr_ok:
-                logger.info("FlareSolverr obtained Cloudflare cookies, attempting FEID login via Playwright...")
-                try:
-                    success = await self._refresh_with_playwright(use_headless)
-                    if success:
-                        logger.info("Session refreshed successfully (FlareSolverr + Playwright FEID login)")
-                        return True
-                except Exception as e:
-                    logger.error(f"Playwright FEID login failed after FlareSolverr: {e}")
-            else:
-                logger.warning("FlareSolverr-first refresh failed, trying Playwright fallback...")
-
-        success = await self._refresh_with_playwright(use_headless)
+        success = await self._refresh_with_flaresolverr()
         if success:
-            logger.info("Session refreshed successfully via Playwright")
+            logger.info("Session refreshed successfully via FlareSolverr")
             return True
 
-        if prefer_flaresolverr:
-            logger.warning("Playwright fallback failed after FlareSolverr-first strategy.")
-            return False
-
-        logger.warning("Playwright refresh failed, trying FlareSolverr fallback...")
-        return await self._refresh_with_flaresolverr()
-
-    def _should_prefer_flaresolverr(self, use_headless: bool) -> bool:
-        """Prefer FlareSolverr in unattended server environments."""
-        env_value = os.getenv("PREFER_FLARESOLVERR_REFRESH")
-        if env_value is not None:
-            return env_value.lower() == "true"
-        return use_headless and bool(os.getenv("FLARESOLVERR_URL"))
-
-    async def _refresh_with_playwright(self, use_headless: bool) -> bool:
-        """Attempt a Playwright-based refresh."""
-        logger.info(f"Starting Playwright FEID login (headless={use_headless})...")
-        try:
-            auth = FAPAutoLogin(
-                headless=use_headless,
-                feid=self.feid,
-                password=self.password,
-                interactive=False,
-            )
-            result = await asyncio.wait_for(auth.auto_login(), timeout=180)
-            logger.info(f"Playwright FEID login result: {result}")
-            return result
-        except asyncio.TimeoutError:
-            logger.error("Playwright FEID login timed out after 180s")
-            return False
-        except Exception as e:
-            logger.error(f"Playwright FEID login error: {e}", exc_info=True)
-            return False
+        logger.warning(
+            "FlareSolverr session is not authenticated. "
+            "Manual login required: restart FlareSolverr with HEADLESS=false "
+            "and run `python -m scraper.flaresolverr_auth login`"
+        )
+        return False
 
     async def _wait_for_flaresolverr(self, timeout: int = 60) -> bool:
         """Wait for FlareSolverr to become ready (handles startup race condition)."""
@@ -194,21 +135,18 @@ class SessionValidator:
         return False
 
     async def _refresh_with_flaresolverr(self) -> bool:
-        """
-        Fall back to FlareSolverr when the direct Playwright login flow is
-        blocked by Cloudflare.
-        """
+        """Refresh session using FlareSolverr."""
         flaresolverr_url = os.getenv("FLARESOLVERR_URL")
         if not flaresolverr_url:
-            logger.warning("FlareSolverr fallback skipped - FLARESOLVERR_URL is not configured")
+            logger.error("FLARESOLVERR_URL is not configured")
             return False
 
         if not await self._wait_for_flaresolverr():
             return False
 
-        logger.info(f"Trying FlareSolverr via {flaresolverr_url}")
+        logger.info(f"Refreshing via FlareSolverr ({flaresolverr_url})")
 
-        def _run_flaresolverr_refresh() -> bool:
+        def _run_refresh() -> bool:
             auth = FAPFlareSolverrAuth(
                 flaresolverr_url=flaresolverr_url,
                 data_dir=str(self.data_dir)
@@ -216,20 +154,16 @@ class SessionValidator:
             return auth.refresh_cookies()
 
         try:
-            success = await asyncio.to_thread(_run_flaresolverr_refresh)
+            success = await asyncio.to_thread(_run_refresh)
         except Exception as e:
-            logger.error(f"FlareSolverr fallback error: {e}")
+            logger.error(f"FlareSolverr refresh error: {e}")
             return False
 
         if success:
-            logger.info("✅ FlareSolverr fallback refreshed shared cookies successfully")
+            logger.info("FlareSolverr session authenticated, cookies saved")
             return True
 
-        logger.warning(
-            "FlareSolverr fallback failed. If you used FlareSolverr before, "
-            "restart it and re-authenticate that session with "
-            "`python scraper/flaresolverr_auth.py login`."
-        )
+        logger.warning("FlareSolverr session not authenticated (needs manual login)")
         return False
 
     async def get_valid_session(self) -> bool:
@@ -239,30 +173,18 @@ class SessionValidator:
         Returns:
             True if session is valid (or was refreshed successfully)
         """
-        # First check if session exists and is healthy
-        if self.is_session_valid():
+        if self.cookies_file.exists():
             if await self.check_session_health():
-                logger.info("✅ Session is valid")
+                logger.info("Session is valid")
                 return True
             else:
-                logger.warning("⚠️ Session expired, refreshing...")
+                logger.warning("Session expired, refreshing...")
 
-        # Need to refresh or login
         return await self.refresh_session()
 
 
-# Convenience function
 async def ensure_valid_session(feid: str = None, password: str = None) -> bool:
-    """
-    Ensure FAP session is valid, refresh if needed
-
-    Args:
-        feid: FeID username
-        password: FeID password
-
-    Returns:
-        True if session is valid
-    """
+    """Ensure FAP session is valid, refresh if needed"""
     validator = SessionValidator(feid=feid, password=password)
     return await validator.get_valid_session()
 

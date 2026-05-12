@@ -298,7 +298,7 @@ class FAPFlareSolverrAuth:
             return []
 
     def save_cookies(self, cookies: List[Dict]) -> bool:
-        """Persist cookies so the main Playwright fetchers can reuse them."""
+        """Persist cookies so aiohttp fetchers can reuse them."""
         if not cookies:
             return False
 
@@ -313,11 +313,10 @@ class FAPFlareSolverrAuth:
         """
         Refresh the shared cookie jar using FlareSolverr.
 
-        Strategy: FlareSolverr bypasses Cloudflare and returns cf_clearance
-        cookies. We save these cookies so Playwright can reuse them for the
-        actual FEID login (which Playwright handles better than FlareSolverr).
+        Uses FlareSolverr's persistent browser session to fetch FAP.
+        If the session is authenticated, saves cookies for aiohttp to use.
+        If not authenticated, returns False (needs manual login).
         """
-        # Create session and fetch FAP to bypass Cloudflare
         if not self._session_created:
             if not self.create_session():
                 logger.error("FlareSolverr session creation failed")
@@ -332,38 +331,40 @@ class FAPFlareSolverrAuth:
         }
 
         try:
-            logger.info("FlareSolverr: fetching FAP to get Cloudflare cookies...")
+            logger.info("FlareSolverr: fetching FAP schedule page...")
             result = self._request(payload)
 
             status = result.get("status")
-            logger.info(f"FlareSolverr response status: {status}")
-
             if status != "ok":
                 logger.error(f"FlareSolverr error: {result.get('message')}")
                 return False
 
             solution = result.get("solution", {})
+            html = solution.get("response", "")
             cookies = solution.get("cookies", [])
-            page_status = solution.get("status")
             url = solution.get("url", "")
 
-            logger.info(f"FlareSolverr page status: {page_status}, url: {url}, cookies: {len(cookies)}")
+            authenticated = "ctl00_mainContent_drpSelectWeek" in html
 
-            if not cookies:
-                logger.info("No cookies returned (Cloudflare not challenged or no auth). Saving empty cookie list.")
-                self.cookies_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.cookies_file, "w", encoding="utf-8") as f:
-                    json.dump([], f, indent=2)
-                return True
-
-            cf_clearance = next((c for c in cookies if c.get("name") == "cf_clearance"), None)
-            if cf_clearance:
-                logger.info("cf_clearance obtained (Cloudflare bypassed)")
+            if authenticated:
+                logger.info("FlareSolverr session is AUTHENTICATED - schedule page loaded")
             else:
-                logger.info("No cf_clearance cookie, saving anyway")
+                logger.warning(f"FlareSolverr session is NOT authenticated (url: {url})")
 
-            logger.info(f"Got {len(cookies)} cookies from FlareSolverr")
-            return self.save_cookies(cookies)
+            logger.info(f"FlareSolverr: cookies={len(cookies)}, authenticated={authenticated}")
+
+            if cookies:
+                cf_clearance = next((c for c in cookies if c.get("name") == "cf_clearance"), None)
+                if cf_clearance:
+                    logger.info("cf_clearance cookie present (Cloudflare bypassed)")
+
+            # Save whatever cookies we have (even empty) for aiohttp
+            self.cookies_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.cookies_file, "w", encoding="utf-8") as f:
+                json.dump(cookies, f, indent=2)
+            logger.info(f"Saved {len(cookies)} cookies to {self.cookies_file}")
+
+            return authenticated
 
         except Exception as e:
             logger.error(f"FlareSolverr refresh_cookies failed: {e}", exc_info=True)
