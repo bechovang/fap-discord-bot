@@ -273,6 +273,11 @@ class FlareSolverrLogin:
             logger.info("Login successful! Schedule page accessible.")
             return self._save_cookies_http(http)
 
+        # Step 6: Handle OAuth callback - FeID may return a page with auto-submit form
+        # (response_mode=form_post) that needs manual POSTing to FAP
+        if self._handle_oauth_callback(http, resp):
+            return True
+
         # Might need one more redirect
         if "fap.fpt.edu.vn" in resp.url:
             logger.info("Redirected to FAP, checking schedule page...")
@@ -296,6 +301,109 @@ class FlareSolverrLogin:
         logger.debug(f"Final page (first 500): {resp.text[:500]}")
         self._save_cookies_http(http)
         return False
+
+    # ── OAuth callback handler ──────────────────────────────────────
+
+    def _handle_oauth_callback(self, http: http_requests.Session, resp) -> bool:
+        """
+        After FeID login, the OAuth flow may return pages with auto-submit forms
+        (response_mode=form_post) that requests can't execute. Detect and submit them.
+        """
+        # Check multiple pages for auto-submit forms pointing to FAP
+        urls_to_check = [
+            resp.url,
+            "https://feid.fpt.edu.vn/connect/authorize/callback",
+        ]
+
+        # First, try to follow the FeID redirect chain manually
+        for check_url in urls_to_check:
+            try:
+                r = http.get(check_url, timeout=30, allow_redirects=True)
+                html = r.text
+
+                # Look for auto-submit form to FAP
+                form = self._find_auto_submit_form(html, "fap.fpt.edu.vn")
+                if form:
+                    action_url, form_data = form
+                    logger.info(f"Found OAuth auto-submit form → {action_url[:80]}")
+                    resp = http.post(
+                        action_url, data=form_data, timeout=30,
+                        allow_redirects=True,
+                        headers={"Referer": str(r.url), "Content-Type": "application/x-www-form-urlencoded"},
+                    )
+                    logger.info(f"After OAuth callback POST: {resp.status_code}, URL: {resp.url}")
+
+                    if self._is_authenticated(resp.text):
+                        logger.info("Login successful after OAuth callback!")
+                        return self._save_cookies_http(http)
+
+                    # Check for nested auto-submit forms
+                    form2 = self._find_auto_submit_form(resp.text, "fap.fpt.edu.vn")
+                    if form2:
+                        action2, data2 = form2
+                        logger.info(f"Found nested auto-submit form → {action2[:80]}")
+                        resp = http.post(action2, data=data2, timeout=30, allow_redirects=True)
+                        if self._is_authenticated(resp.text):
+                            logger.info("Login successful after nested callback!")
+                            return self._save_cookies_http(http)
+
+                    # Final check - try schedule page
+                    if "fap.fpt.edu.vn" in resp.url:
+                        resp = http.get(self.FAP_SCHEDULE_URL, timeout=30)
+                        if self._is_authenticated(resp.text):
+                            logger.info("Login successful!")
+                            return self._save_cookies_http(http)
+            except Exception as e:
+                logger.debug(f"OAuth callback check {check_url}: {e}")
+
+        # Check the original response for auto-submit forms
+        form = self._find_auto_submit_form(resp.text, "fap.fpt.edu.vn")
+        if form:
+            action_url, form_data = form
+            logger.info(f"Found auto-submit in original response → {action_url[:80]}")
+            resp = http.post(action_url, data=form_data, timeout=30, allow_redirects=True)
+            if self._is_authenticated(resp.text):
+                logger.info("Login successful!")
+                return self._save_cookies_http(http)
+
+        return False
+
+    def _find_auto_submit_form(self, html: str, target_domain: str) -> Optional[tuple]:
+        """Find a form with auto-submit JavaScript that posts to target_domain."""
+        # Look for forms with document.forms[0].submit() or similar
+        form_match = re.search(
+            r'<form[^>]*action="([^"]*{}[^"]*)"[^>]*>(.*?)</form>'.format(re.escape(target_domain)),
+            html, re.DOTALL | re.IGNORECASE
+        )
+        if not form_match:
+            # Try any form with auto-submit
+            form_match = re.search(
+                r'<form[^>]*action="([^"]*)"[^>]*>(.*?)</form>',
+                html, re.DOTALL | re.IGNORECASE
+            )
+            if not form_match or target_domain not in form_match.group(1):
+                return None
+
+        action_url = form_match.group(1)
+        form_html = form_match.group(2)
+
+        # Check for auto-submit script
+        has_autosubmit = bool(re.search(r'\.submit\(\)|document\.forms', html))
+
+        # Extract all hidden inputs
+        form_data = {}
+        for m in re.finditer(r'<input[^>]+type="hidden"[^>]*>', form_html, re.IGNORECASE):
+            tag = m.group(0)
+            name_m = re.search(r'name="([^"]*)"', tag)
+            val_m = re.search(r'value="([^"]*)"', tag)
+            if name_m:
+                form_data[name_m.group(1)] = val_m.group(1) if val_m else ""
+
+        if not form_data:
+            return None
+
+        logger.info(f"Auto-submit form found: {len(form_data)} fields, auto={has_autosubmit}")
+        return (action_url, form_data)
 
     # ── Cookie saving ──────────────────────────────────────────────
 
