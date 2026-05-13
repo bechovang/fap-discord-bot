@@ -371,7 +371,26 @@ class FAPAutoLogin:
                         logger.info(f"Found submit button: {selector}")
                         await btn.click()
                         logger.info("Login form submitted...")
-                        await asyncio.sleep(5)
+
+                        # Wait for navigation or error message
+                        for wait_i in range(15):
+                            await asyncio.sleep(1)
+                            current = self._page.url
+                            # Redirected away from FeID login = success
+                            if "feid.fpt.edu.vn" not in current or "Account/Login" not in current:
+                                logger.info(f"FeID redirect detected: {current[:80]}")
+                                return
+                            # Check for error messages on page
+                            error_el = self._page.locator(".field-validation-error, .validation-summary-errors, .text-danger, [class*='error'], [class*='Error']")
+                            if await error_el.count() > 0:
+                                error_text = await error_el.first.inner_text()
+                                logger.error(f"FeID login error: {error_text}")
+                                return
+
+                        # Still on login page after 15s — log page content
+                        logger.warning(f"Still on FeID login after 15s: {self._page.url[:100]}")
+                        body_text = await self._page.locator("body").inner_text()
+                        logger.warning(f"FeID page body: {body_text[:500]}")
                         break
                 except Exception:
                     continue
