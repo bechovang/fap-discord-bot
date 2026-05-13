@@ -1,12 +1,13 @@
 """
 Turnstile Solver Module
 Integrated from Turnstile-Solver for Cloudflare bypass
+Uses Camoufox (Firefox anti-detect browser) for Cloudflare resistance.
 """
 import asyncio
 import logging
 from typing import Optional
 from dataclasses import dataclass
-from patchright.async_api import async_playwright
+from camoufox.async_api import AsyncCamoufox
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +23,20 @@ class TurnstileResult:
 
 class TurnstileSolver:
     """
-    Cloudflare Turnstile Solver using PatchRight
+    Cloudflare Turnstile Solver using Camoufox
     Handles detection and solving of Turnstile challenges
     """
 
     def __init__(self, headless: bool = True, user_agent: Optional[str] = None):
         self.headless = headless
-        self.user_agent = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        self.user_agent = user_agent
 
     async def solve_turnstile(self, page, timeout: int = 30000) -> Optional[str]:
         """
         Wait for and extract Turnstile token from page
 
         Args:
-            page: PatchRight Page object
+            page: Playwright Page object (from Camoufox)
             timeout: Maximum time to wait in milliseconds
 
         Returns:
@@ -67,7 +68,7 @@ class TurnstileSolver:
 
     async def solve_with_browser(self, url: str, sitekey: Optional[str] = None) -> TurnstileResult:
         """
-        Solve Turnstile by navigating to URL with browser
+        Solve Turnstile by navigating to URL with Camoufox browser
 
         Args:
             url: URL containing Turnstile
@@ -79,21 +80,14 @@ class TurnstileSolver:
         import time
         start_time = time.time()
 
+        camoufox = None
         try:
-            playwright = await async_playwright().start()
-            browser_args = [
-                '--disable-blink-features=AutomationControlled',
-                f'--user-agent={self.user_agent}'
-            ]
-
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                args=browser_args
-            )
+            headless_mode = "virtual" if self.headless else False
+            camoufox = AsyncCamoufox(headless=headless_mode, geoip=True)
+            browser = await camoufox.__aenter__()
 
             context = await browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
-                user_agent=self.user_agent
             )
 
             page = await context.new_page()
@@ -103,7 +97,6 @@ class TurnstileSolver:
             token = await self.solve_turnstile(page)
 
             await browser.close()
-            await playwright.stop()
 
             elapsed = time.time() - start_time
 
@@ -125,6 +118,12 @@ class TurnstileSolver:
                 success=False,
                 reason=str(e)
             )
+        finally:
+            if camoufox:
+                try:
+                    await camoufox.__aexit__(None, None, None)
+                except Exception:
+                    pass
 
 
 async def get_turnstile_token(url: str, headless: bool = True, user_agent: str = None) -> Optional[str]:

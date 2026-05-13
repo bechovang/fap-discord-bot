@@ -1,7 +1,7 @@
 """
-FAP Auto Login - FeID Flow via patchright
+FAP Auto Login - FeID Flow via Camoufox
 Automates the full login flow: Cloudflare bypass -> FeID login -> Save cookies.
-Uses patchright (patched Playwright) for Cloudflare-resistant browser automation.
+Uses Camoufox (Firefox-based anti-detect browser) for Cloudflare-resistant automation.
 """
 import asyncio
 import json
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 import aiohttp
-from patchright.async_api import async_playwright
+from camoufox.async_api import AsyncCamoufox
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class FAPAutoLogin:
     """
     Automated login flow:
-    1. Launch Chromium with persistent profile + proxy
-    2. Navigate to FAP (Cloudflare auto-bypassed by patchright)
+    1. Launch Firefox via Camoufox with persistent profile + proxy
+    2. Navigate to FAP (Cloudflare auto-bypassed by anti-detect Firefox)
     3. Click "Login With FeID"
     4. Fill FeID form (username + password)
     5. Submit and save cookies for aiohttp
@@ -28,7 +28,7 @@ class FAPAutoLogin:
 
     SCHEDULE_URL = "https://fap.fpt.edu.vn/Report/ScheduleOfWeek.aspx"
     LOGIN_URL = "https://fap.fpt.edu.vn/Default.aspx"
-    PROFILE_DIR = "data/chrome_profile"
+    PROFILE_DIR = "data/firefox_profile"
     COOKIES_FILE = "data/fap_cookies.json"
 
     def __init__(
@@ -43,8 +43,8 @@ class FAPAutoLogin:
         self.profile_dir = Path(self.PROFILE_DIR)
         self.profile_dir.mkdir(parents=True, exist_ok=True)
 
-        self._playwright = None
-        self._browser = None
+        self._camoufox = None
+        self._context = None
         self._page = None
 
     async def auto_login(self) -> bool:
@@ -55,7 +55,6 @@ class FAPAutoLogin:
         logger.info(f"Starting auto-login, FEID: {self.feid}")
 
         try:
-            self._playwright = await async_playwright().start()
             await self._launch_browser()
 
             if not await self._open_login_page():
@@ -95,21 +94,26 @@ class FAPAutoLogin:
             await self.close()
 
     async def _launch_browser(self):
-        """Start patchright with persistent profile + proxy."""
-        logger.info("Starting Chromium with persistent profile...")
+        """Start Camoufox with persistent profile + proxy."""
+        logger.info("Starting Camoufox (Firefox anti-detect) with persistent profile...")
 
-        launch_opts = dict(
+        # Remove stale profile locks
+        for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket", "lock"):
+            lock_path = self.profile_dir / lock_name
+            if lock_path.exists():
+                logger.warning(f"Removing stale lock: {lock_path}")
+                lock_path.unlink()
+
+        # Build Camoufox options
+        # headless="virtual" uses Xvfb virtual display for anti-detection
+        headless_mode = "virtual" if self.headless else False
+
+        camoufox_kwargs = dict(
+            persistent_context=True,
             user_data_dir=str(self.profile_dir),
-            headless=self.headless,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--no-first-run",
-                "--disable-extensions",
-            ],
-            viewport={"width": 1920, "height": 1080},
+            headless=headless_mode,
+            geoip=True,
+            humanize=True,
         )
 
         proxy_url = os.environ.get("PROXY_URL")
@@ -117,30 +121,26 @@ class FAPAutoLogin:
             from urllib.parse import urlparse
             parsed = urlparse(proxy_url)
             logger.info(f"Using proxy: {parsed.hostname}:{parsed.port}")
-            launch_opts["proxy"] = {
-                "server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}",
-                "username": parsed.username or "",
-                "password": parsed.password or "",
-            }
-
-        for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
-            lock_path = self.profile_dir / lock_name
-            if lock_path.exists():
-                logger.warning(f"Removing stale Chromium lock: {lock_path}")
-                lock_path.unlink()
+            proxy_dict = {"server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"}
+            if parsed.username:
+                proxy_dict["username"] = parsed.username
+            if parsed.password:
+                proxy_dict["password"] = parsed.password
+            camoufox_kwargs["proxy"] = proxy_dict
 
         try:
-            self._browser = await self._playwright.chromium.launch_persistent_context(**launch_opts)
+            self._camoufox = AsyncCamoufox(**camoufox_kwargs)
+            self._context = await self._camoufox.__aenter__()
         except Exception as e:
-            logger.error(f"Chromium launch failed: {e}")
-            logger.error(f"  headless={self.headless}, profile_dir={self.profile_dir}")
+            logger.error(f"Camoufox launch failed: {e}")
+            logger.error(f"  headless={headless_mode}, profile_dir={self.profile_dir}")
             logger.error(f"  DISPLAY={os.environ.get('DISPLAY', 'unset')}")
             raise
 
-        if self._browser.pages:
-            self._page = self._browser.pages[0]
+        if self._context.pages:
+            self._page = self._context.pages[0]
         else:
-            self._page = await self._browser.new_page()
+            self._page = await self._context.new_page()
 
     async def _open_login_page(self) -> bool:
         """Open the FAP login page, waiting for Cloudflare challenge to pass."""
@@ -235,7 +235,7 @@ class FAPAutoLogin:
     async def _persist_cookies(self) -> bool:
         """Export current browser cookies to the shared JSON file."""
         logger.info("Exporting cookies to JSON file...")
-        cookies = await self._page.context.cookies()
+        cookies = await self._context.cookies()
         fap_cookies = [c for c in cookies if "fpt.edu.vn" in c.get("domain", "")]
 
         Path(self.COOKIES_FILE).parent.mkdir(parents=True, exist_ok=True)
@@ -368,8 +368,7 @@ class FAPAutoLogin:
 
         headers = {
             "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
             ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         }
@@ -476,19 +475,13 @@ class FAPAutoLogin:
         raise AttributeError("fetch_application is not implemented")
 
     async def close(self):
-        """Close browser and Playwright handles safely."""
-        if self._browser is not None:
+        """Close Camoufox browser context safely."""
+        if self._camoufox is not None:
             try:
-                await self._browser.close()
+                await self._camoufox.__aexit__(None, None, None)
             except Exception:
                 pass
-            self._browser = None
+            self._camoufox = None
 
-        if self._playwright is not None:
-            try:
-                await self._playwright.stop()
-            except Exception:
-                pass
-            self._playwright = None
-
+        self._context = None
         self._page = None

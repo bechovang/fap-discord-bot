@@ -1,5 +1,5 @@
 """
-Session Validator - Check and auto-refresh FAP session via patchright
+Session Validator - Check and auto-refresh FAP session via Camoufox
 """
 import os
 import json
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class SessionValidator:
-    """Validate and refresh FAP session via patchright browser"""
+    """Validate and refresh FAP session via Camoufox browser"""
 
     def __init__(self, feid: str = None, password: str = None, data_dir: str = "data"):
         self.feid = feid or os.environ.get("FAP_FEID") or os.environ.get("FAP_USERNAME")
@@ -68,8 +68,8 @@ class SessionValidator:
             return False
 
     async def refresh_session(self, headless: bool = None) -> bool:
-        """Refresh session by running full auto-login via patchright."""
-        logger.info("Refreshing FAP session via patchright...")
+        """Refresh session by running full auto-login via Camoufox."""
+        logger.info("Refreshing FAP session via Camoufox...")
 
         if not self.feid or not self.password:
             logger.error("No FEID credentials configured")
