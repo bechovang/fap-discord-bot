@@ -110,12 +110,14 @@ class FAPAuth:
             )
 
     async def _ensure_validator(self):
-        """Ensure SessionValidator instance is created"""
+        """Ensure SessionValidator instance is created, sharing the same FAPAutoLogin."""
         if self._validator is None:
+            await self._ensure_auth()
             self._validator = SessionValidator(
                 feid=self.username,
                 password=self.password,
-                data_dir=self.data_dir
+                data_dir=self.data_dir,
+                login_instance=self._auth,
             )
 
     async def get_session(self, force_refresh: bool = False, fast_check: bool = True):

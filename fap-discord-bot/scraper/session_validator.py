@@ -14,11 +14,13 @@ logger = logging.getLogger(__name__)
 class SessionValidator:
     """Validate and refresh FAP session via Camoufox browser"""
 
-    def __init__(self, feid: str = None, password: str = None, data_dir: str = "data"):
+    def __init__(self, feid: str = None, password: str = None, data_dir: str = "data",
+                 login_instance: 'FAPAutoLogin' = None):
         self.feid = feid or os.environ.get("FAP_FEID") or os.environ.get("FAP_USERNAME")
         self.password = password or os.environ.get("FAP_PASSWORD")
         self.data_dir = Path(data_dir)
         self.cookies_file = self.data_dir / "fap_cookies.json"
+        self._login = login_instance
 
     def is_session_valid(self) -> bool:
         return self.cookies_file.exists()
@@ -77,14 +79,19 @@ class SessionValidator:
 
         headless = headless or (os.getenv("HEADLESS", "false").lower() == "true")
 
-        login = FAPAutoLogin(
-            headless=headless,
-            feid=self.feid,
-            password=self.password,
-        )
+        # Close existing browser before launching new one (avoids profile lock)
+        if self._login is not None:
+            await self._login.close()
+
+        if self._login is None:
+            self._login = FAPAutoLogin(
+                headless=headless,
+                feid=self.feid,
+                password=self.password,
+            )
 
         try:
-            success = await login.auto_login()
+            success = await self._login.auto_login()
         except Exception as e:
             logger.error(f"Auto-login error: {e}", exc_info=True)
             return False
