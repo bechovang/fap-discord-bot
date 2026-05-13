@@ -1,167 +1,167 @@
 # FAP Discord Bot
 
-A Discord bot that fetches and displays FPT University academic data — schedule, exams, grades, and attendance — directly in Discord using slash commands.
+Bot Discord tự động lấy và hiển thị dữ liệu học tập từ FPT University — lịch học, lịch thi, điểm số, và điểm danh — trực tiếp trên Discord qua slash commands.
 
-The bot authenticates with FAP (FPT Academic Portal) via FeID OAuth, bypasses Cloudflare Turnstile using Camoufox (Firefox-based anti-detect browser), and keeps the browser session alive for on-demand data fetching.
-
----
-
-## Features
-
-- **Schedule** — View today's classes or the full weekly schedule
-- **Exams** — Check exam schedule and upcoming exams
-- **Grades** — Browse grades by term, view cumulative GPA
-- **Attendance** — Track attendance by course and term
-- **Auto-refresh** — Session automatically refreshes when expired
-- **Background jobs** — Attendance monitoring (15 min), weekly change reports (Sun 22:00), session keepalive (4h)
-- **Cloudflare bypass** — Camoufox with Turnstile checkbox click + persistent Firefox profile
+Bot xác thực với FAP (FPT Academic Portal) thông qua FeID OAuth, vượt Cloudflare Turnstile bằng Camoufox (trình duyệt Firefox chống detect), và duy trì phiên trình duyệt để lấy dữ liệu theo yêu cầu.
 
 ---
 
-## Commands
+## Tính năng
 
-| Command | Description |
+- **Lịch học** — Xem lịch hôm nay hoặc cả tuần
+- **Lịch thi** — Xem lịch thi và các kỳ thi sắp tới
+- **Điểm số** — Xem điểm theo kỳ, tính GPA tích lũy
+- **Điểm danh** — Theo dõi điểm danh theo môn và kỳ
+- **Tự động làm mới** — Phiên tự động refresh khi hết hạn
+- **Background jobs** — Giám sát điểm danh (15 phút), báo cáo thay đổi hàng tuần (CN 22:00), giữ phiên (4 giờ)
+- **Vượt Cloudflare** — Camoufox với click Turnstile checkbox + Firefox profile cố định
+
+---
+
+## Lệnh (Commands)
+
+| Lệnh | Mô tả |
 |---|---|
-| `/schedule today` | Today's class schedule |
-| `/schedule week [week] [year]` | Weekly schedule |
-| `/exam schedule` | Full exam schedule |
-| `/exam upcoming` | Upcoming exams |
-| `/grade view` | Interactive grade browser |
-| `/grade this-term` | Current term grades |
-| `/grade gpa` | Cumulative GPA calculation |
-| `/attendance view` | Interactive attendance browser |
-| `/attendance this-term` | Current term attendance |
-| `/status` | Bot health and session info |
-| `/ping` | Connectivity check |
-| `/config channel` | Set notification channel |
-| `/config status` | Show current config |
+| `/schedule today` | Lịch học hôm nay |
+| `/schedule week [week] [year]` | Lịch học cả tuần |
+| `/exam schedule` | Lịch thi đầy đủ |
+| `/exam upcoming` | Các kỳ thi sắp tới |
+| `/grade view` | Xem điểm tương tác |
+| `/grade this-term` | Điểm kỳ hiện tại |
+| `/grade gpa` | Tính GPA tích lũy |
+| `/attendance view` | Xem điểm danh tương tác |
+| `/attendance this-term` | Điểm danh kỳ hiện tại |
+| `/status` | Trạng thái bot và phiên |
+| `/ping` | Kiểm tra kết nối |
+| `/config channel` | Cài đặt kênh thông báo |
+| `/config status` | Xem cấu hình hiện tại |
 
 ---
 
-## Architecture
+## Kiến trúc
 
 ```
 Discord Slash Command
-  -> bot/commands/*.py          (Discord UI layer)
-  -> scraper/auth.py            (FAPAuth adapter with auto-refresh)
-  -> scraper/auto_login_feid.py (Camoufox browser: login + fetch)
+  -> bot/commands/*.py          (Lớp giao diện Discord)
+  -> scraper/auth.py            (FAPAuth adapter với auto-refresh)
+  -> scraper/auto_login_feid.py (Trình duyệt Camoufox: login + fetch)
   -> FAP portal HTML
-  -> scraper/*_parser.py        (HTML parsers)
+  -> scraper/*_parser.py        (Các HTML parser)
   -> Discord response
 ```
 
-### Key Components
+### Các thành phần chính
 
-| File | Role |
+| File | Vai trò |
 |---|---|
-| `bot/bot.py` | Discord client setup, command loading, scheduler startup |
-| `bot/commands/` | Slash command implementations |
-| `bot/scheduler.py` | Background jobs (attendance, weekly report, keepalive) |
-| `scraper/auth.py` | `FAPAuth` adapter — wraps fetch + auto-refresh with retry |
-| `scraper/auto_login_feid.py` | `FAPAutoLogin` — Camoufox browser automation for login and page fetching |
-| `scraper/session_validator.py` | `SessionValidator` — session health check and refresh |
-| `scraper/parser.py` | Schedule HTML parser |
-| `scraper/exam_parser.py` | Exam schedule parser |
-| `scraper/grade_parser.py` | Grade parser with GPA calculation |
-| `scraper/attendance_parser.py` | Attendance parser |
-| `scraper/cloudflare.py` | Turnstile helper utilities |
+| `bot/bot.py` | Discord client, load lệnh, khởi động scheduler |
+| `bot/commands/` | Triển khai các slash command |
+| `bot/scheduler.py` | Background jobs (điểm danh, báo cáo tuần, keepalive) |
+| `scraper/auth.py` | `FAPAuth` adapter — bao bọc fetch + auto-refresh với retry |
+| `scraper/auto_login_feid.py` | `FAPAutoLogin` — Tự động hóa Camoufox cho login và fetch |
+| `scraper/session_validator.py` | `SessionValidator` — Kiểm tra sức khỏe phiên và refresh |
+| `scraper/parser.py` | Parser lịch học HTML |
+| `scraper/exam_parser.py` | Parser lịch thi |
+| `scraper/grade_parser.py` | Parser điểm số + tính GPA |
+| `scraper/attendance_parser.py` | Parser điểm danh |
+| `scraper/cloudflare.py` | Tiện ích xử lý Turnstile |
 
-### Authentication Flow
+### Quy trình xác thực
 
 ```
-1. Launch Camoufox (Firefox anti-detect) with persistent profile + proxy
-2. Navigate to FAP -> Cloudflare Turnstile challenge
-3. Find and click Turnstile checkbox inside challenges.cloudflare.com iframe
-4. Select campus -> Click "Login With FeID" button
-5. Fill FeID login form (username + password) -> Submit
-6. Wait for OAuth redirect back to FAP
-7. Keep browser open for subsequent page fetches
-8. Cookies exported to data/fap_cookies.json as backup
+1. Khởi chạy Camoufox (Firefox anti-detect) với persistent profile + proxy
+2. Điều hướng đến FAP -> Cloudflare Turnstile challenge
+3. Tìm và click checkbox Turnstile trong iframe challenges.cloudflare.com
+4. Chọn campus -> Click nút "Login With FeID"
+5. Điền form FeID (username + password) -> Submit
+6. Chờ OAuth redirect về FAP
+7. Giữ trình duyệt mở để fetch các trang tiếp theo
+8. Cookies được xuất ra data/fap_cookies.json làm backup
 ```
 
-### Why Keep the Browser Open?
+### Tại sao giữ trình duyệt mở?
 
-Cloudflare `cf_clearance` cookies are validated against:
-- **IP address** — must match the proxy IP used during challenge
-- **TLS fingerprint (JA3/JA4)** — must match the browser that solved the challenge
-- **User-Agent** — must match exactly
+Cloudflare kiểm tra `cf_clearance` cookies dựa trên:
+- **Địa chỉ IP** — phải khớp với proxy IP đã dùng khi giải challenge
+- **TLS fingerprint (JA3/JA4)** — phải khớp với trình duyệt đã giải challenge
+- **User-Agent** — phải khớp chính xác
 
-No Python HTTP client (aiohttp, requests, curl_cffi) can replicate the exact TLS fingerprint of a real Firefox browser. The only reliable way to fetch pages from a Cloudflare-protected site is to use the browser itself. So after login, the browser stays open and `page.goto()` + `page.content()` are used for all data fetching.
+Không có Python HTTP client nào (aiohttp, requests, curl_cffi) có thể tái tạo chính xác TLS fingerprint của Firefox thật. Cách duy nhất để fetch trang từ site được Cloudflare bảo vệ là dùng chính trình duyệt đó. Nên sau khi login, trình duyệt giữ mở và dùng `page.goto()` + `page.content()` để lấy dữ liệu.
 
 ---
 
-## Deployment
+## Triển khai (Deployment)
 
-### Docker (Recommended)
+### Docker (Khuyến nghị)
 
 ```bash
-# Clone the repo
+# Clone repo
 git clone https://github.com/bechovang/fap-discord-bot.git
 cd fap-discord-bot
 
-# Create .env from template
+# Tạo .env từ template
 cp .env.example .env
-# Edit .env with your credentials
+# Chỉnh .env với thông tin của bạn
 
-# Build and run
+# Build và chạy
 docker compose up -d bot
 ```
 
-The Dockerfile handles everything:
+Dockerfile xử lý mọi thứ:
 - Python 3.11-slim base
 - Firefox dependencies + Xvfb virtual display
-- Camoufox browser binary download
-- Auto-start Xvfb + bot on container launch
+- Tải Camoufox browser binary
+- Tự động khởi động Xvfb + bot khi container chạy
 
-### Manual Setup
+### Cài thủ công
 
 ```bash
 pip install -r requirements.txt
-python -m camoufox fetch          # Download Firefox binary
+python -m camoufox fetch          # Tải Firefox binary
 python fap-discord-bot/main.py
 ```
 
 ---
 
-## Configuration
+## Cấu hình
 
-Create a `.env` file (see `.env.example`):
+Tạo file `.env` (xem `.env.example`):
 
 ```env
-# Required
+# Bắt buộc
 DISCORD_TOKEN=your_discord_bot_token
 FAP_USERNAME=your_feid_email
 FAP_PASSWORD=your_password
 
-# Recommended
-FAP_CAMPUS=4                              # Campus ID (default: 4)
+# Khuyến nghị
+FAP_CAMPUS=4                              # Campus ID (mặc định: 4)
 HEADLESS=false                            # false = Xvfb virtual display
-PROXY_URL=http://user:pass@host:port      # Residential proxy (required for datacenter IPs)
+PROXY_URL=http://user:pass@host:port      # Residential proxy (cần cho datacenter IP)
 
-# Optional
-FAP_STUDENT_ID=SE123456                   # Required for grade/attendance commands
-SCHEDULER_TIMEZONE=Asia/Ho_Chi_Minh       # Scheduler timezone
-DEFAULT_CHANNEL_ID=123456789              # Default notification channel
+# Tùy chọn
+FAP_STUDENT_ID=SE123456                   # Cần cho lệnh grade/attendance
+SCHEDULER_TIMEZONE=Asia/Ho_Chi_Minh       # Múi giờ scheduler
+DEFAULT_CHANNEL_ID=123456789              # Kênh thông báo mặc định
 LOG_LEVEL=INFO
 ```
 
-### Important: Password Escaping in Docker
+### Lưu ý: Escape mật khẩu trong Docker
 
-If your password contains `$` (e.g., `Eg8$Fw1$`), Docker Compose interprets `$` as variable substitution. Escape it as `$$`:
+Nếu mật khẩu chứa `$` (ví dụ `Eg8$Fw1$`), Docker Compose hiểu `$` là thay thế biến. Cần escape thành `$$`:
 
 ```env
 FAP_PASSWORD=Eg8$$Fw1$$
 ```
 
-### Proxy Requirements
+### Yêu cầu Proxy
 
-A **residential proxy** is required when running on datacenter IPs (DigitalOcean, AWS, etc.). Cloudflare Turnstile checks IP reputation and silently fails on datacenter IPs, regardless of browser fingerprinting.
+**Residential proxy** là bắt buộc khi chạy trên datacenter IP (DigitalOcean, AWS, v.v.). Cloudflare Turnstile kiểm tra uy tín IP và sẽ thất bại im lặng trên datacenter IP, bất kể browser fingerprinting.
 
-Recommended: rotating residential proxies from providers like Webshare, Bright Data, or Oxylabs.
+Khuyến nghị: rotating residential proxies từ các nhà cung cấp như Webshare, Bright Data, hoặc Oxylabs.
 
 ---
 
-## Project Structure
+## Cấu trúc dự án
 
 ```
 fap-discord-bot/
@@ -175,7 +175,7 @@ fap-discord-bot/
 │   ├── bot.py                  # Discord client + startup
 │   ├── scheduler.py            # Background jobs
 │   ├── notifier.py             # Discord notification helper
-│   ├── progress.py             # Progress tracking for long ops
+│   ├── progress.py             # Progress tracking
 │   └── commands/
 │       ├── schedule.py         # /schedule today, /schedule week
 │       ├── exam.py             # /exam schedule, /exam upcoming
@@ -202,93 +202,171 @@ fap-discord-bot/
 
 ## Background Jobs
 
-The scheduler runs 3 jobs automatically:
+Scheduler chạy 3 jobs tự động:
 
-| Job | Interval | Description |
+| Job | Chu kỳ | Mô tả |
 |---|---|---|
-| **Attendance Check** | Every 15 min | Monitors current slot for attendance status changes, sends Discord alerts |
-| **Weekly Check** | Sunday 22:00 | Compares grades/schedule/exams with previous week, notifies changes |
-| **Session Keepalive** | Every 4 hours | Validates session freshness, triggers re-login if expired |
+| **Attendance Check** | Mỗi 15 phút | Giám sát slot hiện tại cho thay đổi điểm danh, gửi alert Discord |
+| **Weekly Check** | Chủ nhật 22:00 | So sánh điểm/lịch/thi với tuần trước, thông báo thay đổi |
+| **Session Keepalive** | Mỗi 4 giờ | Kiểm tra phiên, trigger re-login nếu hết hạn |
 
 ---
 
-## Lessons Learned
+## Quản trị Server (DigitalOcean)
 
-### 1. Cloudflare Turnstile is Not a Simple JS Challenge
+Bot được deploy trên DigitalOcean Droplet (SGP1 - Singapore). Dùng `doctl` CLI để quản lý.
 
-Turnstile checks multiple signals beyond `navigator.webdriver`:
-- **IP reputation** — datacenter IPs cause silent failure (no error, just never resolves)
-- **TLS fingerprint (JA3/JA4)** — each TLS client has a unique fingerprint
+### Thông tin kết nối
+
+```
+Droplet: fap-bot (ID: 570186178)
+IP: 68.183.233.253
+SSH key: ~/.ssh/id_ed25519_fapbot
+Project path: /opt/fap-bot/
+```
+
+### Các lệnh quản lý thường dùng
+
+```bash
+# SSH vào server
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot
+
+# Xem logs
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot --ssh-command "docker logs fap-discord-bot --tail 50"
+
+# Restart container
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot --ssh-command "cd /opt/fap-bot && docker compose up -d --force-recreate"
+
+# Xem file .env hiện tại
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot --ssh-command "cat /opt/fap-bot/.env"
+```
+
+### Đổi Proxy trên Production
+
+Proxy có thời hạn (thường 2 tháng). Khi cần đổi proxy mới:
+
+```bash
+# 1. Cập nhật PROXY_URL trong .env trên server
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot \
+  --ssh-command "sed -i 's|PROXY_URL=.*|PROXY_URL=http://user:pass@host:port|' /opt/fap-bot/.env"
+
+# 2. Nếu .env có các biến PROXY riêng lẻ, cập nhật cả 3:
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot \
+  --ssh-command "sed -i 's|PROXY_URL=.*|PROXY_URL=http://user:pass@host:port|' /opt/fap-bot/.env && sed -i 's|PROXY_URL_HOST=.*|PROXY_URL_HOST=http://host:port|' /opt/fap-bot/.env && sed -i 's|PROXY_USERNAME=.*|PROXY_USERNAME=user|' /opt/fap-bot/.env && sed -i 's|PROXY_PASSWORD=.*|PROXY_PASSWORD=pass|' /opt/fap-bot/.env"
+
+# 3. Restart container để áp dụng
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot \
+  --ssh-command "cd /opt/fap-bot && docker compose up -d --force-recreate"
+
+# 4. Kiểm tra logs xem proxy hoạt động không
+doctl compute ssh 570186178 --ssh-key-path ~/.ssh/id_ed25519_fapbot \
+  --ssh-command "docker logs fap-discord-bot --tail 30"
+```
+
+**Lưu ý quan trọng về scheme proxy:**
+- Proxy loại "HTTPS" nghĩa là proxy hỗ trợ **traffic HTTPS**, nhưng bản thân kết nối đến proxy dùng `http://`
+- Dùng `https://` sẽ gây lỗi SSL: `SSL: UNEXPECTED_EOF_WHILE_READING`
+- Định dạng đúng: `http://user:pass@host:port` (luôn dùng `http://`)
+
+**Các lỗi thường gặp khi đổi proxy:**
+
+| Lỗi | Nguyên nhân | Cách fix |
+|---|---|---|
+| `ProxyError: SSL: UNEXPECTED_EOF_WHILE_READING` | Dùng `https://` thay vì `http://` | Đổi scheme thành `http://` |
+| `InvalidProxy: Failed to connect to proxy` | Proxy hết hạn hoặc không hoạt động | Kiểm tra lại proxy, mua proxy mới |
+| `session refresh failed` sau khi đổi proxy | Proxy mới chưa được apply | Restart container bằng `docker compose up -d --force-recreate` |
+
+---
+
+## Bài học kinh nghiệm
+
+### 1. Cloudflare Turnstile không phải là JS challenge đơn giản
+
+Turnstile kiểm tra nhiều tín hiệu ngoài `navigator.webdriver`:
+- **Uy tín IP** — datacenter IP gây thất bại im lặng (không có lỗi, chỉ không bao giờ resolve)
+- **TLS fingerprint (JA3/JA4)** — mỗi TLS client có fingerprint riêng
 - **Browser fingerprint** — WebGL, canvas, fonts, screen resolution
-- **Mouse movement history** — human-like interaction patterns
+- **Lịch sử di chuột** — patterns tương tác giống người
 
-**Lesson**: No headless browser trick alone can bypass Turnstile on a datacenter IP. You need residential proxies + anti-detect browser.
+**Bài học**: Không có headless browser trick nào có thể vượt Turnstile trên datacenter IP. Cần residential proxies + anti-detect browser.
 
-### 2. `cf_clearance` Cookies Are Browser-Bound
+### 2. `cf_clearance` Cookies gắn với trình duyệt
 
-We tried extracting cookies from the browser and using them with `aiohttp` and `curl_cffi`. Both failed with 403 because:
-- Cloudflare validates cookies against the TLS fingerprint of the client
-- aiohttp's TLS fingerprint looks nothing like Firefox
-- Even `curl_cffi` with `impersonate="firefox"` doesn't perfectly match Camoufox's TLS
+Đã thử extract cookies từ browser và dùng với `aiohttp` và `curl_cffi`. Cả hai đều fail 403 vì:
+- Cloudflare kiểm tra cookies với TLS fingerprint của client
+- TLS fingerprint của aiohttp không giống Firefox
+- Ngay cả `curl_cffi` với `impersonate="firefox"` cũng không khớp hoàn hảo với TLS của Camoufox
 
-**Lesson**: For Cloudflare-protected sites, the browser that solves the challenge must also be the one making subsequent requests. Keep the browser open and use `page.goto()` for fetching.
+**Bài học**: Với site được Cloudflare bảo vệ, trình duyệt giải challenge phải là trình duyệt gửi request tiếp theo. Giữ browser mở và dùng `page.goto()` để fetch.
 
-### 3. Password Escaping in Docker Compose
+### 3. Escape mật khẩu trong Docker Compose
 
-Password `Eg8$Fw1$` was silently mangled by Docker Compose's variable substitution (`$F` and trailing `$` eaten). This caused FeID to reject login with "incorrect username or password".
+Password `Eg8$Fw1$` bị Docker Compose hiểu nhầm do thay thế biến (`$F` và `$` cuối bị cắt). FeID từ chối login với "incorrect username or password".
 
-**Lesson**: In `.env` files used by Docker Compose, always escape `$` as `$$` for passwords containing dollar signs.
+**Bài học**: Trong `.env` dùng bởi Docker Compose, luôn escape `$` thành `$$` cho password chứa dollar sign.
 
-### 4. Vietnamese Cloudflare Titles
+### 4. Tiêu đề Cloudflare tiếng Việt
 
-The Cloudflare challenge page title was `"Chờ một chút..."` (Vietnamese for "Just a moment..."). Our code only checked for English keywords `"moment"` and `"challenge"`, so it thought the page was loaded and tried to interact too early.
+Tiêu đề trang Cloudflare challenge là `"Chờ một chút..."` (tiếng Việt). Code chỉ kiểm tra keyword tiếng Anh `"moment"` và `"challenge"`, nên tưởng trang đã load và tương tác quá sớm.
 
-**Lesson**: Always check for localized Cloudflare titles, or better yet, wait for actual page content (login button, schedule dropdown) instead of checking what the title is NOT.
+**Bài học**: Luôn kiểm tra tiêu đề Cloudflare đã được dịch, hoặc tốt hơn là đợi nội dung trang thực tế (nút login, dropdown lịch) thay vì kiểm tra tiêu đề.
 
-### 5. Profile Lock Conflicts
+### 5. Xung đột Profile Lock
 
-Running two Camoufox instances with the same persistent profile causes lock conflicts — the second instance hangs waiting for the profile, then times out after 180 seconds.
+Chạy hai Camoufox instance với cùng persistent profile gây xung đột lock — instance thứ hai bị treo chờ profile, rồi timeout sau 180 giây.
 
-This happened because `FAPAuth` and `SessionValidator` each created their own `FAPAutoLogin` instance. The first browser (from login) stayed open, but the second browser (from session refresh) couldn't acquire the profile lock.
+Điều này xảy ra vì `FAPAuth` và `SessionValidator` mỗi cái tạo `FAPAutoLogin` instance riêng. Browser đầu tiên (từ login) vẫn mở, nhưng browser thứ hai (từ session refresh) không lấy được profile lock.
 
-**Lesson**: Share a single browser instance across login and fetch operations. Close the old browser before launching a new one.
+**Bài học**: Chia sẻ một browser instance cho cả login và fetch. Đóng browser cũ trước khi mở browser mới.
 
-### 6. The FlareSolverr -> patchright -> Camoufox Journey
+### 6. Hành trình FlareSolverr -> patchright -> Camoufox
 
-- **FlareSolverr**: First attempt. Used a separate service to solve Cloudflare, then `requests` for login. Failed because FlareSolverr couldn't handle the OAuth redirect chain (PKCE mismatch).
-- **patchright** (Chromium): Second attempt. Successfully automated the full login flow but Cloudflare Turnstile never resolved on datacenter IPs, even with `navigator.webdriver=False`.
-- **Camoufox** (Firefox): Final solution. Anti-detect Firefox with residential proxy + explicit Turnstile checkbox click. Works reliably.
+- **FlareSolverr**: Lần thử đầu. Dùng service riêng để giải Cloudflare, rồi `requests` để login. Thất bại vì FlareSolverr không xử lý được chuỗi OAuth redirect (PKCE mismatch).
+- **patchright** (Chromium): Lần thử thứ hai. Tự động hóa thành công login nhưng Cloudflare Turnstile không bao giờ resolve trên datacenter IP, ngay cả với `navigator.webdriver=False`.
+- **Camoufox** (Firefox): Giải pháp cuối cùng. Firefox anti-detect với residential proxy + click Turnstile checkbox tường minh. Hoạt động ổn định.
 
-**Lesson**: For Cloudflare-protected sites on servers, use Firefox-based anti-detect browsers with residential proxies. Chromium-based solutions (even with anti-detection patches) are more easily fingerprinted.
+**Bài học**: Cho site được Cloudflare bảo vệ trên server, dùng Firefox-based anti-detect browser với residential proxies. Chromium-based (ngay cả với anti-detection patches) dễ bị fingerprint hơn.
 
 ### 7. Xvfb Readiness Race
 
-Starting Xvfb and immediately launching the browser can cause a race condition — the browser tries to connect to the display before Xvfb is ready.
+Khởi động Xvfb và ngay lập tức mở browser có thể gây race condition — browser cố kết nối đến display trước khi Xvfb sẵn sàng.
 
-**Fix**: Wait for the X11 lock file before starting the application:
+**Fix**: Đợi X11 lock file trước khi khởi động ứng dụng:
 ```bash
 Xvfb :99 -screen 0 1280x720x24 & until [ -e /tmp/.X99-lock ]; do sleep 0.1; done; python main.py
 ```
 
+### 8. Scheme Proxy HTTPS vs HTTP
+
+Proxy loại "HTTPS" tạo nhầm lẫn — nó nghĩa là proxy hỗ trợ **traffic HTTPS**, không phải kết nối đến proxy bằng HTTPS.
+
+Khi dùng `https://user:pass@host:port`, Camoufox cố thiết lập TLS handshake đến proxy server, gây lỗi:
+```
+SSL: UNEXPECTED_EOF_WHILE_READING
+```
+
+**Bài học**: Luôn dùng `http://` scheme để kết nối đến proxy, bất kể proxy có hỗ trợ HTTPS traffic hay không.
+
 ---
 
-## Troubleshooting
+## Khắc phục sự cố
 
-| Issue | Solution |
+| Vấn đề | Giải pháp |
 |---|---|
-| `Failed to fetch schedule: refresh retry still could not access FAP` | Session expired and re-login failed. Check logs for Turnstile or FeID errors. |
-| Cloudflare challenge never resolves | Need residential proxy. Datacenter IPs are blocked by Turnstile. |
-| FeID login "incorrect password" | Check password escaping in `.env` — escape `$` as `$$`. |
-| `TargetClosedError` on browser launch | Firefox dependencies missing. Check Dockerfile has `libgtk-3-0 libx11-xcb1 libasound2`. |
-| Browser timeout on launch | Stale profile locks. Delete `data/firefox_profile/SingletonLock` files. |
-| `No space left on device` during build | Old Docker images. Run `docker system prune -af --volumes`. |
-| Attendance/grades return empty | Set `FAP_STUDENT_ID` and `FAP_CAMPUS` in `.env`. |
+| `Failed to fetch schedule: refresh retry still could not access FAP` | Phiên hết hạn và re-login thất bại. Kiểm tra logs xem lỗi Turnstile hay FeID. |
+| Cloudflare challenge không resolve | Cần residential proxy. Datacenter IP bị Turnstile chặn. |
+| FeID login "incorrect password" | Kiểm tra escape password trong `.env` — escape `$` thành `$$`. |
+| `TargetClosedError` khi mở browser | Thiếu Firefox dependencies. Kiểm tra Dockerfile có `libgtk-3-0 libx11-xcb1 libasound2`. |
+| Browser timeout khi khởi động | Profile lock cũ. Xóa `data/firefox_profile/SingletonLock` files. |
+| `No space left on device` khi build | Docker images cũ. Chạy `docker system prune -af --volumes`. |
+| Điểm danh/điểm trả về rỗng | Cài `FAP_STUDENT_ID` và `FAP_CAMPUS` trong `.env`. |
+| `SSL: UNEXPECTED_EOF_WHILE_READING` | Proxy scheme sai. Dùng `http://` thay vì `https://`. |
 
 ---
 
 ## Tech Stack
 
-| Component | Technology |
+| Thành phần | Công nghệ |
 |---|---|
 | Bot framework | Discord.py 2.7+ |
 | Browser automation | Camoufox 0.4+ (Firefox-based anti-detect) |
@@ -297,6 +375,7 @@ Xvfb :99 -screen 0 1280x720x24 & until [ -e /tmp/.X99-lock ]; do sleep 0.1; done
 | Data validation | Pydantic 2.x |
 | Container | Docker + Docker Compose |
 | Virtual display | Xvfb |
+| Server | DigitalOcean Droplet (SGP1) |
 
 ---
 
