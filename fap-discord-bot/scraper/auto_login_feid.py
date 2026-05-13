@@ -152,16 +152,29 @@ class FAPAutoLogin:
             return False
 
         # Wait for Cloudflare challenge to resolve
-        for i in range(30):
+        # CF titles: "Just a moment..." (EN), "Chờ một chút..." (VI), etc.
+        cf_keywords = ("moment", "challenge", "chờ", "vui lòng chờ", "checking", "attention")
+        for i in range(60):
             title = await self._page.title()
-            if "moment" not in title.lower() and "challenge" not in title.lower():
-                logger.info(f"Page loaded: {title}")
-                return True
+            title_lower = title.lower()
+            is_cf_challenge = any(kw in title_lower for kw in cf_keywords)
+
+            if not is_cf_challenge:
+                # Also verify we're past CF by checking page content
+                content = await self._page.content()
+                if "btnloginFeId" in content or "drpSelectWeek" in content or "ddlCampus" in content:
+                    logger.info(f"Page loaded: {title}")
+                    return True
+                # Title changed but no FAP content yet — might be mid-redirect
+                if i > 5:
+                    logger.info(f"Title changed to: {title}")
+                    return True
+
             if i % 5 == 0:
-                logger.info(f"Waiting for Cloudflare challenge... ({i}s)")
+                logger.info(f"Waiting for Cloudflare challenge... ({i}s) title={title}")
             await asyncio.sleep(1)
 
-        logger.warning("Cloudflare challenge did not resolve within 30s")
+        logger.warning("Cloudflare challenge did not resolve within 60s")
         return True
 
     async def _is_schedule_page(self) -> bool:
