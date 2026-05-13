@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bot:
     build: .
@@ -12,11 +10,6 @@ services:
       - FAP_STUDENT_ID=${FAP_STUDENT_ID}
       - FAP_CAMPUS=${FAP_CAMPUS:-4}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
-      - PREFER_FLARESOLVERR_REFRESH=${PREFER_FLARESOLVERR_REFRESH:-true}
-      - FLARESOLVERR_MAX_TIMEOUT_MS=${FLARESOLVERR_MAX_TIMEOUT_MS:-180000}
-      - FLARESOLVERR_WAIT_SECONDS=${FLARESOLVERR_WAIT_SECONDS:-5}
-      - FLARESOLVERR_REQUEST_TIMEOUT_SECONDS=${FLARESOLVERR_REQUEST_TIMEOUT_SECONDS:-240}
       - DATABASE_PATH=data/fap.db
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-Asia/Ho_Chi_Minh}
@@ -26,44 +19,5 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    depends_on:
-      - flaresolverr
-    networks:
-      - bot-network
-
-  flaresolverr:
-    build:
-      context: .
-      dockerfile: flaresolverr.Dockerfile
-    container_name: flaresolverr
-    restart: unless-stopped
-    ports:
-      - "8191:8191"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - HEADLESS=false
-      - DISPLAY=:99
-      - PROXY_URL=${PROXY_URL_HOST:-}
-      - PROXY_USERNAME=${PROXY_USERNAME:-}
-      - PROXY_PASSWORD=${PROXY_PASSWORD:-}
-    entrypoint: ["/bin/sh", "-c", "Xvfb :99 -screen 0 1280x720x24 & sleep 1; x11vnc -display :99 -forever -nopw -shared -rfbport 5900 & /usr/bin/dumb-init -- /usr/local/bin/python -u /app/flaresolverr.py"]
-    networks:
-      - bot-network
-
-  novnc:
-    image: theasp/novnc:latest
-    container_name: novnc
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - REMOTE_HOST=flaresolverr
-      - REMOTE_PORT=5900
-    depends_on:
-      - flaresolverr
-    networks:
-      - bot-network
-
-networks:
-  bot-network:
-    driver: bridge
+    tmpfs:
+      - /dev/shm:size=1g

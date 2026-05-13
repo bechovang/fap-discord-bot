@@ -2,7 +2,7 @@
 FAP Authentication Adapter with Auto-Refresh
 
 Adapter class that provides FAPAuth interface using saved cookies.
-Session refresh is handled by SessionValidator via FlareSolverr.
+Session refresh is handled by SessionValidator via patchright.
 """
 import os
 import logging
@@ -25,7 +25,7 @@ class FAPAuth:
 
     Provides FAPAuth-compatible interface for bot code.
     Uses FAPAutoLogin for aiohttp-based data fetching.
-    Session refresh is handled by SessionValidator via FlareSolverr.
+    Session refresh is handled by SessionValidator via patchright.
     """
 
     def __init__(
@@ -227,7 +227,7 @@ class FAPAuth:
                     operation="refresh",
                     status="error",
                     code="refresh_failed",
-                    detail="Session refresh failed via FlareSolverr.",
+                    detail="Session refresh failed via patchright.",
                 )
 
             return success
