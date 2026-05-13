@@ -445,9 +445,26 @@ class FAPAutoLogin:
             content = await self._page.content()
             final_url = self._page.url
 
-            # If redirected to login, session expired
+            # Check 1: Redirected to FAP login/landing page (Default.aspx)
+            if 'Default.aspx' in final_url and 'Default.aspx' not in url:
+                logger.warning(f"Redirected to FAP landing page - session expired: {final_url}")
+                return None
+
+            # Check 2: URL contains Login
             if "Login" in final_url and "ScheduleOfWeek" not in final_url:
                 logger.warning(f"Redirected to login page: {final_url}")
+                return None
+
+            # Check 3: Page content has login button = not authenticated
+            if 'btnloginFeId' in content:
+                logger.warning(f"Login button found in page content - session expired (URL: {final_url})")
+                return None
+
+            # Check 4: Cloudflare challenge still active
+            title = await self._page.title()
+            cf_keywords = ("just a moment", "checking your browser", "attention required", "vui lòng chờ")
+            if any(kw in title.lower() for kw in cf_keywords):
+                logger.warning(f"Cloudflare challenge still active: {title}")
                 return None
 
             return content
