@@ -114,6 +114,7 @@ class FAPAutoLogin:
             headless=headless_mode,
             geoip=True,
             humanize=True,
+            disable_coop=True,  # Allow clicking cross-origin iframes (Turnstile)
         )
 
         proxy_url = os.environ.get("PROXY_URL")
@@ -143,7 +144,7 @@ class FAPAutoLogin:
             self._page = await self._context.new_page()
 
     async def _open_login_page(self) -> bool:
-        """Open the FAP login page, waiting for Cloudflare challenge to pass."""
+        """Open the FAP login page, waiting for Cloudflare Turnstile to pass."""
         logger.info("Navigating to FAP login page...")
         try:
             await self._page.goto(self.LOGIN_URL, timeout=60000)
@@ -154,21 +155,25 @@ class FAPAutoLogin:
         # Wait for Cloudflare challenge to resolve
         # CF titles: "Just a moment..." (EN), "Chờ một chút..." (VI), etc.
         cf_keywords = ("moment", "challenge", "chờ", "vui lòng chờ", "checking", "attention")
+        turnstile_clicked = False
+
         for i in range(60):
             title = await self._page.title()
             title_lower = title.lower()
             is_cf_challenge = any(kw in title_lower for kw in cf_keywords)
 
             if not is_cf_challenge:
-                # Also verify we're past CF by checking page content
                 content = await self._page.content()
                 if "btnloginFeId" in content or "drpSelectWeek" in content or "ddlCampus" in content:
                     logger.info(f"Page loaded: {title}")
                     return True
-                # Title changed but no FAP content yet — might be mid-redirect
                 if i > 5:
                     logger.info(f"Title changed to: {title}")
                     return True
+
+            # Try clicking the Turnstile checkbox inside its iframe
+            if is_cf_challenge and not turnstile_clicked and i >= 3:
+                turnstile_clicked = await self._click_turnstile()
 
             if i % 5 == 0:
                 logger.info(f"Waiting for Cloudflare challenge... ({i}s) title={title}")
@@ -176,6 +181,38 @@ class FAPAutoLogin:
 
         logger.warning("Cloudflare challenge did not resolve within 60s")
         return True
+
+    async def _click_turnstile(self) -> bool:
+        """Find and click the Cloudflare Turnstile checkbox."""
+        try:
+            # Turnstile renders inside an iframe from challenges.cloudflare.com
+            frames = self._page.frames
+            for frame in frames:
+                if "challenges.cloudflare.com" in (frame.url or ""):
+                    logger.info("Found Turnstile iframe, clicking checkbox...")
+                    # The checkbox is typically an input[type="checkbox"] or a clickable div
+                    checkbox = frame.locator("input[type='checkbox']")
+                    if await checkbox.count() > 0:
+                        await checkbox.first.click()
+                        logger.info("Clicked Turnstile checkbox")
+                        await asyncio.sleep(3)
+                        return True
+                    # Fallback: click the main body of the Turnstile widget
+                    body = frame.locator("body")
+                    if await body.count() > 0:
+                        box = await body.first.bounding_box()
+                        if box:
+                            # Click the left-center area where the checkbox usually is
+                            click_x = box["x"] + 30
+                            click_y = box["y"] + box["height"] / 2
+                            await self._page.mouse.click(click_x, click_y)
+                            logger.info("Clicked Turnstile widget area")
+                            await asyncio.sleep(3)
+                            return True
+            logger.info("No Turnstile iframe found")
+        except Exception as exc:
+            logger.debug(f"Turnstile click attempt failed: {exc}")
+        return False
 
     async def _is_schedule_page(self) -> bool:
         """Check whether the current page is the schedule page."""
