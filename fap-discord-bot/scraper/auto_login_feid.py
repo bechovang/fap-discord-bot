@@ -143,7 +143,7 @@ class FAPAutoLogin:
             self._page = await self._browser.new_page()
 
     async def _open_login_page(self) -> bool:
-        """Open the FAP login page."""
+        """Open the FAP login page, waiting for Cloudflare challenge to pass."""
         logger.info("Navigating to FAP login page...")
         try:
             await self._page.goto(self.LOGIN_URL, timeout=60000)
@@ -151,7 +151,17 @@ class FAPAutoLogin:
             logger.error(f"Failed to open login page: {exc}")
             return False
 
-        await asyncio.sleep(3)
+        # Wait for Cloudflare challenge to resolve
+        for i in range(30):
+            title = await self._page.title()
+            if "moment" not in title.lower() and "challenge" not in title.lower():
+                logger.info(f"Page loaded: {title}")
+                return True
+            if i % 5 == 0:
+                logger.info(f"Waiting for Cloudflare challenge... ({i}s)")
+            await asyncio.sleep(1)
+
+        logger.warning("Cloudflare challenge did not resolve within 30s")
         return True
 
     async def _is_schedule_page(self) -> bool:
@@ -209,13 +219,17 @@ class FAPAutoLogin:
         """Try direct login or fail."""
         logger.warning("Not redirected to FeID. Checking page...")
         content = await self._page.content()
+        logger.warning(f"Page URL: {self._page.url}")
+        logger.warning(f"Page title: {await self._page.title()}")
 
         if "Password" in content or "password" in content:
             logger.info("Found password field - attempting direct login...")
             await self._handle_direct_login()
             return True
 
-        logger.error("No login form found.")
+        # Dump snippet for debugging
+        body_text = await self._page.locator("body").inner_text()
+        logger.error(f"No login form found. Page body: {body_text[:500]}")
         return False
 
     async def _persist_cookies(self) -> bool:
