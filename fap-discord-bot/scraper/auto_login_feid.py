@@ -86,12 +86,16 @@ class FAPAutoLogin:
 
             if await self._is_schedule_page():
                 logger.info("Login successful! Schedule page accessible!")
-                return await self._persist_cookies()
+                await self._persist_cookies()
+                # Keep browser open for subsequent fetches
+                return True
 
             logger.error(f"Login may have failed. Current URL: {self._page.url}")
-            return False
-        finally:
             await self.close()
+            return False
+        except Exception:
+            await self.close()
+            raise
 
     async def _launch_browser(self):
         """Start Camoufox with persistent profile + proxy."""
@@ -429,42 +433,30 @@ class FAPAutoLogin:
         except Exception:
             return {}
 
-    async def _http_get(self, url: str, timeout: int = 30) -> Optional[str]:
-        """Fetch a URL using aiohttp with saved cookies."""
-        cookies = self._load_cookies_dict()
-        if not cookies:
+    async def _fetch_page(self, url: str) -> Optional[str]:
+        """Fetch a page using the open browser (already past Cloudflare)."""
+        if not self._page or not self._context:
             return None
-
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        }
 
         try:
-            async with aiohttp.ClientSession(
-                cookies=cookies,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as session:
-                async with session.get(url, allow_redirects=True) as resp:
-                    if resp.status != 200:
-                        return None
+            await self._page.goto(url, timeout=30000)
+            await asyncio.sleep(2)
 
-                    content = await resp.text()
-                    final_url = str(resp.url)
-                    if "Login" in final_url or "Default.aspx" in final_url:
-                        return None
+            content = await self._page.content()
+            final_url = self._page.url
 
-                    return content
-        except asyncio.TimeoutError:
-            return None
-        except Exception:
+            # If redirected to login, session expired
+            if "Login" in final_url and "ScheduleOfWeek" not in final_url:
+                logger.warning(f"Redirected to login page: {final_url}")
+                return None
+
+            return content
+        except Exception as exc:
+            logger.error(f"Browser fetch failed for {url}: {exc}")
             return None
 
     async def fetch_schedule(self, week: int = None, year: int = None) -> Optional[str]:
-        """Fetch schedule using aiohttp with saved cookies."""
+        """Fetch schedule using the browser."""
         url = self.SCHEDULE_URL
         params = []
         if week is not None:
@@ -474,18 +466,12 @@ class FAPAutoLogin:
         if params:
             url += "?" + "&".join(params)
 
-        content = await self._http_get(url)
-        if content and "ctl00_mainContent_drpSelectWeek" in content:
-            return content
-        return content if content and len(content) > 500 else None
+        return await self._fetch_page(url)
 
     async def fetch_exam_schedule(self) -> Optional[str]:
-        """Fetch exam schedule using aiohttp with saved cookies."""
+        """Fetch exam schedule using the browser."""
         exam_url = "https://fap.fpt.edu.vn/Exam/ScheduleExams.aspx"
-        content = await self._http_get(exam_url)
-        if content and ("Schedule Exam" in content or "table" in content.lower()):
-            return content
-        return content if content and len(content) > 500 else None
+        return await self._fetch_page(exam_url)
 
     async def fetch_attendance(
         self,
@@ -494,7 +480,7 @@ class FAPAutoLogin:
         term: int = None,
         course: int = None,
     ) -> Optional[str]:
-        """Fetch attendance using aiohttp with saved cookies."""
+        """Fetch attendance using the browser."""
         attendance_url = "https://fap.fpt.edu.vn/Report/ViewAttendstudent.aspx"
         params = []
         if student_id:
@@ -510,10 +496,7 @@ class FAPAutoLogin:
         if params:
             url += "?" + "&".join(params)
 
-        content = await self._http_get(url)
-        if content and ("ViewAttendstudent" in content or "divTerm" in content):
-            return content
-        return content if content and len(content) > 500 else None
+        return await self._fetch_page(url)
 
     async def fetch_grades(
         self,
@@ -521,7 +504,7 @@ class FAPAutoLogin:
         term: str = None,
         course: int = None,
     ) -> Optional[str]:
-        """Fetch grades using aiohttp with saved cookies."""
+        """Fetch grades using the browser."""
         grade_url = "https://fap.fpt.edu.vn/Grade/StudentGrade.aspx"
         params = []
         if student_id:
@@ -535,10 +518,7 @@ class FAPAutoLogin:
         if params:
             url += "?" + "&".join(params)
 
-        content = await self._http_get(url)
-        if content and ("StudentGrade" in content or "divTerm" in content):
-            return content
-        return content if content and len(content) > 500 else None
+        return await self._fetch_page(url)
 
     async def fetch_application(self):
         raise AttributeError("fetch_application is not implemented")

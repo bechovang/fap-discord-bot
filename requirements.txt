@@ -16,6 +16,7 @@ cryptography>=41.0.0
 
 # Async
 aiohttp>=3.9.0
+curl_cffi>=0.15.0
 
 # Scheduler
 apscheduler>=3.10.0
