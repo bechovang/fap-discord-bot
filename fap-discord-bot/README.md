@@ -1,163 +1,103 @@
 # FAP Discord Bot
 
-Discord bot for viewing FPT University FAP data from Discord. The current implementation supports schedule, exams, grades, attendance, session auto-refresh, and interactive grade/attendance views.
+Discord bot for viewing FPT University FAP data. Supports schedule, exams, grades, and attendance with automatic session management and Cloudflare Turnstile bypass via Camoufox.
 
-## What Works Now
+## What Works
 
-- FeID login through Playwright
-- Cookie reuse and session validation
-- Auto-refresh when a fetch fails because the session expired
-- Weekly schedule fetching
-- Exam schedule fetching
-- Grade parsing and cumulative GPA calculation
-- Attendance parsing with per-term and per-course browsing
-- Slash commands for status and health checks
-- Global async lock in `scraper/auth.py` to avoid concurrent browser fetch conflicts
+- Camoufox-based FeID login with Cloudflare Turnstile bypass
+- Browser kept open for on-demand page fetching (cf_clearance is TLS-bound)
+- Cookie persistence and automatic session refresh
+- Auto-refresh with retry when a fetch fails because the session expired
+- Schedule, exam, grade, and attendance fetching and parsing
+- Interactive grade/attendance views with Discord UI components
+- Background scheduler: attendance monitoring, weekly reports, session keepalive
+- Global async lock in `scraper/auth.py` to avoid concurrent browser conflicts
+- Shared `FAPAutoLogin` instance between `FAPAuth` and `SessionValidator`
 
-## Not Fully Live Yet
+## Not Fully Live
 
-- Background schedulers and automatic notifications are still design/partial implementation work
-- `bot/commands/pending_checks.py` exists, but it is not loaded by `bot/bot.py`
-- Application scraping support is only partial
+- `bot/commands/pending_checks.py` exists but is not loaded by `bot/bot.py`
+- Application scraping is only partial
 
-## Project Layout
-
-```text
-fap-discord-bot/
-|-- main.py
-|-- README.md
-|-- CHANGELOG.md
-|-- .env.example
-|-- bot/
-|   |-- bot.py
-|   `-- commands/
-|-- scraper/
-|-- utils/
-|-- docs/
-|   |-- README.md
-|   |-- DEVELOPMENT.md
-|   |-- ARCHITECTURE.md
-|   `-- features/
-`-- data/
-```
-
-## Requirements
-
-- Python 3.11+
-- Chromium installed through Playwright
-- Discord bot token
-- FAP credentials
-
-Install dependencies:
+## Quick Start
 
 ```bash
+# Docker (recommended)
+docker compose up -d bot
+
+# Manual
 pip install -r requirements.txt
-playwright install chromium
+python -m camoufox fetch
+python main.py
 ```
 
 ## Configuration
 
-Create `.env` from `.env.example`.
-
-Core values used by the loaded bot:
+Copy `.env.example` to `.env` and fill in:
 
 ```env
-DISCORD_TOKEN=your_discord_bot_token_here
-FAP_USERNAME=your_feid@fe.edu.vn
-FAP_PASSWORD=your_password
-HEADLESS=true
-USER_AGENT=Mozilla/5.0 ...
-FAP_STUDENT_ID=SE123456
+DISCORD_TOKEN=your_token
+FAP_USERNAME=your_email
+FAP_PASSWORD=your_password      # Escape $ as $$ in Docker .env
 FAP_CAMPUS=4
+FAP_STUDENT_ID=SE123456         # Required for grades/attendance
+HEADLESS=false
+PROXY_URL=http://user:pass@host:port  # Required for datacenter IPs
 ```
-
-Notes:
-
-- `FAP_STUDENT_ID` is required by the attendance and grade commands.
-- `FAP_CAMPUS` defaults to `4` in code if not set.
-- The root-level `.env.example` includes extra scheduler-related variables for future notification work.
-
-## First Run
-
-1. Install dependencies.
-2. Create `.env`.
-3. Run the initial login flow:
-
-```bash
-python scraper/auto_login_feid.py login your_feid@fe.edu.vn your_password
-```
-
-4. Start the bot:
-
-```bash
-python main.py
-```
-
-Cookies are stored under `data/`, and session refresh is handled by `scraper/session_validator.py` plus the `FAPAuth` adapter in `scraper/auth.py`.
 
 ## Slash Commands
 
-Currently loaded in `bot/bot.py`:
-
-```text
-/schedule today
-/schedule week [week] [year]
-/exam schedule
-/exam upcoming
-/grade view
-/grade this-term
-/grade gpa
-/attendance view
-/attendance this-term
-/status
-/ping
+```
+/schedule today                  Today's classes
+/schedule week [week] [year]     Weekly schedule
+/exam schedule                   Exam schedule
+/exam upcoming                   Upcoming exams
+/grade view                      Interactive grade browser
+/grade this-term                 Current term grades
+/grade gpa                       Cumulative GPA
+/attendance view                 Interactive attendance browser
+/attendance this-term            Current term attendance
+/status                          Bot health and session info
+/ping                            Connectivity check
+/config channel                  Set notification channel
+/config status                   Show config
 ```
 
-Command behavior:
+## Architecture
 
-- `schedule` fetches the current or requested week and formats classes from `scraper/parser.py`.
-- `exam` uses `scraper/exam_parser.py`.
-- `grade` provides an interactive term/course browser and GPA summary.
-- `attendance` provides an interactive term/course browser plus a dashboard-style current-term view.
-- `status` and `ping` expose runtime health information.
-
-## Runtime Architecture
-
-The main request path is:
-
-```text
-Discord slash command
-  -> bot command cog
-  -> scraper.auth.FAPAuth
-  -> scraper.auto_login_feid.FAPAutoLogin
-  -> FAP portal HTML
-  -> parser module
-  -> Discord response
+```
+Discord command -> bot/commands/ -> scraper/auth.py (FAPAuth)
+  -> scraper/auto_login_feid.py (Camoufox browser)
+  -> FAP HTML -> scraper/*_parser.py -> Discord response
 ```
 
-Important runtime details:
+The browser stays open after login because Cloudflare cookies are TLS-fingerprint-bound. No HTTP client can reuse them. All page fetches go through `page.goto()` + `page.content()`.
 
-- `FAPAuth` wraps fetch operations and retries once after a session refresh.
-- A shared `asyncio.Lock` in `scraper/auth.py` serializes browser-backed fetches.
-- `StatusCommands` receives the shared auth instance from `bot/bot.py`.
+## Project Layout
+
+```
+main.py              Entry point
+bot/
+  bot.py             Discord client + startup
+  scheduler.py       Background jobs (attendance, weekly, keepalive)
+  notifier.py        Discord notification helper
+  commands/          Slash command cogs
+scraper/
+  auth.py            FAPAuth adapter with auto-refresh + retry
+  auto_login_feid.py Camoufox browser automation (login + fetch)
+  session_validator.py  Session health check + refresh
+  cloudflare.py      Turnstile utilities
+  parser.py          Schedule parser
+  exam_parser.py     Exam parser
+  grade_parser.py    Grade parser + GPA
+  attendance_parser.py Attendance parser
+  fap_scraper.py     Legacy scraper interface
+data/                Runtime data (cookies, snapshots, DB)
+```
 
 ## Troubleshooting
 
-- `Missing DISCORD_TOKEN`: check `.env`.
-- `No cookies found`: run the login flow again.
-- `Failed to fetch ...`: session may be expired or FAP may be unavailable.
-- Attendance or grades returning empty data: verify `FAP_STUDENT_ID` and `FAP_CAMPUS`.
-- Browser/login issues: rerun `playwright install chromium` and retry the login flow in non-headless mode if needed.
-
-## Documentation
-
-- Docs index: `docs/README.md`
-- Developer notes: `docs/DEVELOPMENT.md`
-- System architecture: `docs/ARCHITECTURE.md`
-- Exam feature notes: `docs/features/EXAM.md`
-- Grade feature notes: `docs/features/GRADE.md`
-- Historical FlareSolverr guide: `docs/archive/FLARESOLVERR.md`
-
-## Status
-
-The bot is usable for manual slash-command queries. Proactive scheduling and notification documents exist in the repository, but they should be treated as planning/design references unless the corresponding runtime code is wired into `bot/bot.py`.
+- **Schedule fetch fails**: Check logs — likely Turnstile not resolving (need proxy) or FeID password wrong (escape `$` in .env)
+- **Browser timeout**: Stale profile locks — delete `data/firefox_profile/Singleton*` files
+- **Empty grades/attendance**: Set `FAP_STUDENT_ID` and `FAP_CAMPUS` in `.env`
+- **Disk full**: `docker system prune -af --volumes` to clean old images
