@@ -108,9 +108,21 @@ class FAPAutoLogin:
                 logger.warning(f"Removing stale lock: {lock_path}")
                 lock_path.unlink()
 
+        # Clear old profile to avoid Cloudflare flagging (like incognito mode)
+        if self.profile_dir.exists():
+            import shutil
+            logger.info("Clearing old Firefox profile for fresh login (incognito-like)...")
+            shutil.rmtree(self.profile_dir, ignore_errors=True)
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+
         # Build Camoufox options
         # headless="virtual" uses Xvfb virtual display for anti-detection
         headless_mode = "virtual" if self.headless else False
+
+        # Unset DISPLAY so Camoufox's built-in virtual display isn't confused
+        # by a stale or missing external Xvfb
+        if headless_mode == "virtual":
+            os.environ.pop("DISPLAY", None)
 
         camoufox_kwargs = dict(
             persistent_context=True,
