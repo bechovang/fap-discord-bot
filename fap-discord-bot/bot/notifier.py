@@ -46,11 +46,35 @@ def get_channel_id(guild_id: int) -> Optional[int]:
     return channels.get(str(guild_id))
 
 
+def _get_default_channel(bot: discord.Client, guild: discord.Guild) -> Optional[discord.TextChannel]:
+    """Fallback: system channel → first writable text channel"""
+    if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
+        return guild.system_channel
+    for ch in guild.text_channels:
+        if ch.permissions_for(guild.me).send_messages:
+            return ch
+    return None
+
+
 async def send_notification(bot: discord.Client, guild_id: int, embed: discord.Embed) -> bool:
     channel_id = get_channel_id(guild_id)
+    guild = bot.get_guild(guild_id)
+
+    # No configured channel → fall back to default
     if not channel_id:
-        logger.debug(f"No channel configured for guild {guild_id}")
-        return False
+        if not guild:
+            logger.debug(f"Guild {guild_id} not found")
+            return False
+        ch = _get_default_channel(bot, guild)
+        if not ch:
+            logger.warning(f"No writable channel in guild {guild_id}")
+            return False
+        try:
+            await ch.send(embed=embed)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send notification to default channel: {e}")
+            return False
 
     channel = bot.get_channel(channel_id)
     if not channel:
@@ -69,7 +93,5 @@ async def send_notification(bot: discord.Client, guild_id: int, embed: discord.E
 
 
 async def send_to_all_guilds(bot: discord.Client, embed: discord.Embed):
-    channels = _load_channels()
-    for guild_id_str, channel_id in channels.items():
-        guild_id = int(guild_id_str)
-        await send_notification(bot, guild_id, embed)
+    for guild in bot.guilds:
+        await send_notification(bot, guild.id, embed)

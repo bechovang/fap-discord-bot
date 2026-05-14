@@ -110,12 +110,12 @@ class FAPScheduler:
             replace_existing=True,
         )
 
-        # Weekly check every Sunday at 22:00
+        # Daily check every day at 22:00
         self.scheduler.add_job(
             self._weekly_check,
-            CronTrigger(day_of_week="sun", hour=22, minute=7, jitter=120),
-            id="weekly_check",
-            name="Weekly Check",
+            CronTrigger(hour=22, minute=7, jitter=120),
+            id="daily_check",
+            name="Daily Check",
             replace_existing=True,
         )
 
