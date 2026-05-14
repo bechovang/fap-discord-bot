@@ -1,141 +1,85 @@
 # Architecture Specification
 ## FAP Discord Bot - System Design Document
 
-**Version:** 1.0
-**Date:** 2026-03-07
-**Architect:** Winston (BMAD AI Agent) + Admin
-**Document Status:** Draft
+**Version:** 2.0
+**Date:** 2026-05-14
+**Document Status:** Updated
 
 ---
 
 ## Table of Contents
 
-1. [Document Information](#document-information)
-2. [System Overview](#system-overview)
-3. [Architecture Principles](#architecture-principles)
-4. [System Architecture](#system-architecture)
-5. [Component Design](#component-design)
-6. [Data Architecture](#data-architecture)
-7. [Security Architecture](#security-architecture)
-8. [Integration Architecture](#integration-architecture)
-9. [Deployment Architecture](#deployment-architecture)
-10. [Scalability Considerations](#scalability-considerations)
-11. [Technology Stack](#technology-stack)
-12. [Design Decisions](#design-decisions)
-13. [Trade-offs](#trade-offs)
-
----
-
-## Document Information
-
-| Field | Value |
-|-------|-------|
-| **Document Name** | Architecture Specification |
-| **Version** | 1.0 |
-| **Status** | Draft |
-| **Author** | Winston (Architect Agent) |
-| **Reviewers** | Admin, Barry (Dev), Quinn (QA) |
-| **Related Documents** | PRD, Tech Spec, Brainstorming Session |
+1. [System Overview](#system-overview)
+2. [Architecture Principles](#architecture-principles)
+3. [System Architecture](#system-architecture)
+4. [Component Design](#component-design)
+5. [Data Architecture](#data-architecture)
+6. [Security Architecture](#security-architecture)
+7. [Integration Architecture](#integration-architecture)
+8. [Deployment Architecture](#deployment-architecture)
+9. [Technology Stack](#technology-stack)
+10. [Design Decisions](#design-decisions)
+11. [Lessons Learned](#lessons-learned)
 
 ---
 
 ## System Overview
 
 ### Purpose
+
 FAP Discord Bot is a **proactive monitoring and notification system** that tracks FPT University students' academic information through the FAP portal and delivers timely updates via Discord.
 
-### System Scope
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        SYSTEM BOUNDARY                       │
-├─────────────────────────────────────────────────────────────┤
-│  IN SCOPE:                                                  │
-│  ✓ FAP portal monitoring (schedule, grades, attendance)     │
-│  ✓ Discord bot with slash commands                          │
-│  ✓ Background task scheduling                               │
-│  ✓ Notification delivery                                    │
-│  ✓ Data persistence (SQLite)                                │
-│  ✓ Cloudflare bypass (FlareSolverr)                         │
-├─────────────────────────────────────────────────────────────┤
-│  OUT OF SCOPE:                                              │
-│  ✗ FAP portal modification                                 │
-│  ✗ Official FPT mobile app features                         │
-│  ✗ Multi-university support (FPT only)                     │
-│  ✗ Real-time database sync (eventual consistency)          │
-│  ✗ AI features (Phase 4)                                   │
-└─────────────────────────────────────────────────────────────┘
-```
-
 ### System Context
-```mermaid
-graph TB
-    subgraph "External Systems"
-        FAP[FAP Portal]
-        Discord[Discord API]
-        Flare[FlareSolverr]
-    end
 
-    subgraph "FAP Discord Bot"
-        Bot[Bot Core]
-        Scheduler[Background Scheduler]
-        DB[(SQLite Database)]
-        Parser[HTML Parsers]
-    end
-
-    subgraph "Users"
-        Student[FPT Student]
-    end
-
-    Student -->|Slash Commands| Bot
-    Bot -->|Fetch HTML| Flare
-    Flare -->|Bypass CF| FAP
-    FAP -->|HTML Response| Flare
-    Flare -->|HTML| Bot
-    Bot -->|Parse| Parser
-    Bot -->|Store/Retrieve| DB
-    Bot -->|Notifications| Discord
-    Discord -->|Display| Student
-    Scheduler -->|Trigger| Bot
 ```
+Student (Discord)
+    |
+    | Slash Commands (/schedule, /grade, /exam, /attendance)
+    v
++-------------------------------------------------------------+
+|                    FAP Discord Bot                            |
+|                                                               |
+|  Discord Bot (discord.py)                                    |
+|    |                                                          |
+|  Command Handler (bot/commands/)                             |
+|    |                                                          |
+|  FAPAuth Adapter (scraper/auth.py)                           |
+|    |                                                          |
+|  FAPAutoLogin (scraper/auto_login_feid.py)                   |
+|    |                                                          |
+|  Camoufox Browser (Firefox anti-detect)                      |
+|    |                                                          |
++-------------------------------------------------------------+
+    |                              |
+    v                              v
+FAP Portal                    Discord API
+(fap.fpt.edu.vn)             (discord.com)
+    |
+    +-- Cloudflare Turnstile
+    +-- FeID SSO (identity.fpt.edu.vn)
+```
+
+### Key Design Decision: Browser as HTTP Client
+
+Cloudflare's `cf_clearance` cookie is cryptographically tied to the browser's TLS fingerprint (JA3/JA4). No Python HTTP client can reproduce this fingerprint. Therefore, the browser that solves the Cloudflare challenge must also make all subsequent requests. The browser stays open after login and all data fetching uses `page.goto()` + `page.content()`.
 
 ---
 
 ## Architecture Principles
 
 ### AP-1: Simplicity First
-> **"Simplicity is the ultimate sophistication."** - Leonardo da Vinci
+- SQLite over PostgreSQL, single container over microservices
+- One browser instance handles login AND data fetching
 
-- **Rule:** Prefer simple solutions over clever ones
-- **Application:** SQLite over PostgreSQL, single-file deployment over microservices
-- **Rationale:** Easier to maintain, debug, and deploy
+### AP-2: Fail Gracefully
+- Auto-refresh expired sessions via Camoufox re-login
+- Return cached data when FAP is unavailable
+- Diagnostic system for user-facing error messages
 
-### AP-2: User Value Driven
-> **"Architecture exists to serve user needs, not to showcase patterns."**
-
-- **Rule:** Every architectural decision must connect to user value
-- **Application:** 5-min attendance check because students need to know quickly
-- **Rationale:** Avoid over-engineering for "what if" scenarios
-
-### AP-3: Boring Technology
-> **"Boring technology is stable technology."**
-
-- **Rule:** Use battle-tested, well-documented technologies
-- **Application:** Python, SQLite, Docker over bleeding-edge alternatives
-- **Rationale:** Less surprises, better community support
-
-### AP-4: Fail Gracefully
-> **"The system should never be down, even when FAP is."**
-
-- **Rule:** Always have a fallback or cached data
-- **Application:** Show cached schedule when FAP is unavailable
-- **Rationale:** Better to show stale data than no data
-
-### AP-5: Design for Evolution
-> **"Build for now, architect for tomorrow."**
-
-- **Rule:** Make it easy to change without rewriting everything
-- **Application:** Modular parsers, plugin-style commands
-- **Rationale:** Requirements will change; architecture should adapt
+### AP-3: Defense in Depth for Session Management
+- 4-layer session expiry detection in `_fetch_page()`
+- Auto-refresh with lock to prevent concurrent re-logins
+- Cookie backup file for diagnostic purposes
 
 ---
 
@@ -143,843 +87,339 @@ graph TB
 
 ### High-Level Architecture
 
-```mermaid
-graph TB
-    subgraph "Presentation Layer"
-        DiscordBot[Discord Bot]
-        Commands[Slash Commands]
-    end
-
-    subgraph "Application Layer"
-        CommandHandler[Command Handler]
-        BackgroundScheduler[Background Scheduler]
-        NotificationService[Notification Service]
-        FAPClient[FAP Client Service]
-    end
-
-    subgraph "Domain Layer"
-        ScheduleDomain[Schedule Domain]
-        GradeDomain[Grade Domain]
-        AttendanceDomain[Attendance Domain]
-        ExamDomain[Exam Domain]
-        ApplicationDomain[Application Domain]
-    end
-
-    subgraph "Infrastructure Layer"
-        Parsers[HTML Parsers]
-        Database[(SQLite Database)]
-        Cache[State Cache]
-        Auth[Authentication Service]
-        Encryptor[Encryption Service]
-    end
-
-    subgraph "External Dependencies"
-        FAP[FAP Portal]
-        FlareSolverr[FlareSolverr]
-        DiscordAPI[Discord API]
-    end
-
-    DiscordBot --> Commands
-    Commands --> CommandHandler
-    BackgroundScheduler --> FAPClient
-    CommandHandler --> FAPClient
-    FAPClient --> Auth
-    Auth --> FlareSolverr
-    FlareSolverr --> FAP
-    FAP --> Parsers
-    Parsers --> ScheduleDomain
-    Parsers --> GradeDomain
-    Parsers --> AttendanceDomain
-    Parsers --> ExamDomain
-    Parsers --> ApplicationDomain
-    ScheduleDomain --> Database
-    GradeDomain --> Database
-    AttendanceDomain --> Database
-    ExamDomain --> Database
-    ApplicationDomain --> Database
-    CommandHandler --> NotificationService
-    BackgroundScheduler --> NotificationService
-    NotificationService --> DiscordAPI
-    FAPClient --> Encryptor
+```
++-------------------------------------------------------------+
+|                    PRESENTATION LAYER                         |
+|  bot/bot.py — Discord client, event handlers                |
+|  bot/commands/ — Slash command implementations               |
+|  bot/notifier.py — Discord notification formatting           |
++-------------------------------------------------------------+
+                          |
+                          v
++-------------------------------------------------------------+
+|                    APPLICATION LAYER                          |
+|  bot/scheduler.py — Background jobs (APScheduler)            |
+|  scraper/auth.py — FAPAuth adapter (auto-refresh + retry)    |
++-------------------------------------------------------------+
+                          |
+                          v
++-------------------------------------------------------------+
+|                    INFRASTRUCTURE LAYER                       |
+|  scraper/auto_login_feid.py — Camoufox browser automation    |
+|  scraper/session_validator.py — Session health check          |
+|  scraper/cloudflare.py — Turnstile utilities                 |
+|  scraper/*_parser.py — HTML parsers (BeautifulSoup)          |
++-------------------------------------------------------------+
+                          |
+                          v
++-------------------------------------------------------------+
+|                    EXTERNAL SYSTEMS                           |
+|  Camoufox (Firefox anti-detect browser)                      |
+|  FAP Portal (fap.fpt.edu.vn)                                |
+|  FeID SSO (identity.fpt.edu.vn / feid.fpt.edu.vn)           |
+|  Discord API (discord.com)                                   |
++-------------------------------------------------------------+
 ```
 
-### Layer Responsibilities
+### Request Flow
 
-#### Presentation Layer
-- **Discord Bot:** Main bot class, event handlers
-- **Slash Commands:** User-facing command definitions
-- **Responsibilities:** User input, output formatting, permission checks
+```
+1. User types /schedule today in Discord
+2. Discord Bot receives interaction
+3. Command handler calls auth.fetch_schedule()
+4. FAPAuth calls _auth.fetch_schedule() on FAPAutoLogin
+5. FAPAutoLogin calls _fetch_page(url) using open browser
+6. Browser navigates to FAP schedule page
+7. _fetch_page() validates response (4 checks for session expiry)
+8. If valid: returns HTML to parser -> formatted Discord response
+9. If expired (returns None): FAPAuth triggers _refresh_session_once()
+10. SessionValidator refreshes via new Camoufox login
+11. Retry fetch with new session
+```
 
-#### Application Layer
-- **Command Handler:** Routes commands to appropriate services
-- **Background Scheduler:** Manages scheduled tasks
-- **Notification Service:** Formats and sends notifications
-- **FAP Client:** Wraps FAP API interactions
-- **Responsibilities:** Orchestration, business logic, workflow
+### Session Expiry Detection (4 Layers)
 
-#### Domain Layer
-- **Schedule Domain:** Schedule-related logic
-- **Grade Domain:** Grade-related logic
-- **Attendance Domain:** Attendance-related logic
-- **Exam Domain:** Exam-related logic
-- **Application Domain:** Application-related logic
-- **Responsibilities:** Domain rules, validation, calculations
+```python
+# In _fetch_page():
+# Check 1: Redirected to Default.aspx (FAP landing/login page)
+if 'Default.aspx' in final_url and 'Default.aspx' not in url:
+    return None
 
-#### Infrastructure Layer
-- **HTML Parsers:** Parse FAP HTML responses
-- **Database:** Persistent storage
-- **State Cache:** In-memory state management
-- **Authentication Service:** FAP authentication
-- **Encryption Service:** Password encryption
-- **Responsibilities:** Data access, external integrations, cross-cutting concerns
+# Check 2: URL contains "Login" (but not ScheduleOfWeek)
+if "Login" in final_url and "ScheduleOfWeek" not in final_url:
+    return None
+
+# Check 3: Page content has FeID login button
+if 'btnloginFeId' in content:
+    return None
+
+# Check 4: Still on Cloudflare challenge page
+cf_keywords = ("just a moment", "checking your browser", ...)
+if any(kw in title.lower() for kw in cf_keywords):
+    return None
+```
+
+When `_fetch_page()` returns `None`, the FAPAuth adapter:
+1. Records diagnostic (operation, status, code, detail)
+2. Calls `_refresh_session_once()` with asyncio lock
+3. SessionValidator closes old browser, launches new Camoufox
+4. Runs full login flow (Cloudflare -> FeID -> cookies)
+5. Retries the original fetch
 
 ---
 
 ## Component Design
 
-### C1: Discord Bot
+### C1: FAPAutoLogin (auto_login_feid.py)
 
-**Purpose:** Main bot class, Discord event handling
-
-**Responsibilities:**
-- Initialize Discord bot connection
-- Handle Discord events (ready, message, error)
-- Load/unload command cogs
-- Manage bot lifecycle
-
-**Interface:**
-```python
-class FAPBot(commands.Bot):
-    def __init__(self):
-        # Initialize bot with intents
-
-    async def setup_hook(self):
-        # Load cogs, initialize services
-
-    async def on_ready(self):
-        # Sync commands, test FAP connection
-
-    async def on_command_error(self, ctx, error):
-        # Handle command errors
-```
-
-**Dependencies:** `discord.py`, command cogs
-
----
-
-### C2: Command Handler
-
-**Purpose:** Route and execute user commands
+**Purpose:** Camoufox-based browser automation for FAP login and page fetching.
 
 **Responsibilities:**
-- Validate command inputs
-- Check user permissions
-- Call appropriate domain services
-- Format command responses
+- Launch Camoufox with persistent profile and proxy
+- Navigate to FAP, wait for Cloudflare challenge to resolve
+- Click Turnstile checkbox if needed
+- Handle FeID SSO login form
+- Fetch pages via browser (page.goto + page.content)
+- Export cookies to JSON backup
 
-**Interface:**
-```python
-class CommandHandler:
-    def __init__(self, fap_client, database):
-        self.fap_client = fap_client
-        self.database = database
+**Key Methods:**
+| Method | Description |
+|--------|-------------|
+| `auto_login()` | Full login flow: launch browser -> navigate -> FeID -> save cookies |
+| `_launch_browser()` | Start Camoufox with profile cleanup, proxy, headless config |
+| `_open_login_page()` | Navigate to FAP, wait for Cloudflare to resolve (up to 60s) |
+| `_click_turnstile()` | Find and click Turnstile checkbox in challenges.cloudflare.com iframe |
+| `_trigger_feid_login()` | Click "Login With FeID" button or use __doPostBack fallback |
+| `_handle_feid_login()` | Fill FeID username/password form and submit |
+| `_fetch_page(url)` | Fetch any FAP page with 4-layer session validation |
+| `fetch_schedule()` | Fetch schedule HTML via browser |
+| `fetch_exam_schedule()` | Fetch exam schedule HTML via browser |
+| `fetch_attendance()` | Fetch attendance HTML via browser |
+| `fetch_grades()` | Fetch grades HTML via browser |
 
-    async def handle_schedule_command(self, ctx, day=None):
-        # Handle /schedule command
+**Browser Lifecycle:**
+```
+_launch_browser()
+  |- Clear stale profile locks (SingletonLock, SingletonCookie, etc.)
+  |- Delete entire profile directory (fresh start for each login)
+  |- Set headless mode: "virtual" if HEADLESS=true, False otherwise
+  |- Unset DISPLAY env var for virtual mode (avoid Xvfb conflict)
+  |- Configure proxy from PROXY_URL env var
+  |- Create Camoufox instance with persistent context
 
-    async def handle_grades_command(self, ctx, term=None):
-        # Handle /grades command
+auto_login()
+  |- _launch_browser()
+  |- _open_login_page() (Cloudflare wait)
+  |- Check if already logged in (_is_schedule_page)
+  |- _select_campus_if_needed()
+  |- _trigger_feid_login()
+  |- _handle_feid_login()
+  |- _persist_cookies() (JSON backup)
+  |- Browser stays OPEN for subsequent fetches
 
-    # ... other command handlers
+_fetch_page(url) — called for each data request
+  |- page.goto(url)
+  |- 4 validation checks
+  |- Return HTML or None
 ```
 
-**Dependencies:** FAP Client, Database, Domain Services
+### C2: FAPAuth (auth.py)
 
----
-
-### C3: Background Scheduler
-
-**Purpose:** Manage scheduled tasks and intervals
+**Purpose:** Authentication adapter providing auto-refresh with retry logic.
 
 **Responsibilities:**
-- Schedule periodic tasks
-- Execute tasks at specified times
-- Handle task errors and retries
-- Manage task state
+- Wrap FAPAutoLogin for data fetching
+- Detect fetch failures and trigger session refresh
+- Prevent concurrent refresh with asyncio lock
+- Track diagnostics for each operation
+- Format user-facing error messages
 
-**Interface:**
+**Key Methods:**
+| Method | Description |
+|--------|-------------|
+| `get_session()` | Ensure session is valid, refresh if needed |
+| `fetch_schedule()` | Fetch schedule with auto-refresh on failure |
+| `fetch_exam_schedule()` | Fetch exams with auto-refresh on failure |
+| `fetch_grades()` | Fetch grades with auto-refresh on failure |
+| `fetch_attendance()` | Fetch attendance with auto-refresh on failure |
+| `format_last_failure()` | Convert diagnostic to user-facing error message |
+
+**Diagnostic System:**
 ```python
-class BackgroundScheduler:
-    def __init__(self):
-        self.scheduler = AsyncIOScheduler()
-
-    def start(self):
-        # Start scheduler
-
-    def add_attendance_monitor(self, callback):
-        # Add 5-min attendance check
-
-    def add_class_reminder(self, callback):
-        # Add 1-min class reminder check
-
-    def add_evening_schedule(self, callback):
-        # Add 19:30 daily schedule
-
-    def add_hourly_checks(self, callback):
-        # Add hourly grade/application checks
+_diagnostic = {
+    "timestamp": "2026-05-14T10:30:00",
+    "operation": "schedule",        # What was being fetched
+    "status": "warning",            # ok, warning, error
+    "code": "page_unavailable",     # Machine-readable code
+    "detail": "Initial schedule fetch returned no usable HTML."
+}
 ```
 
-**Dependencies:** `APScheduler`, Task Services
+Error codes:
+| Code | Meaning |
+|------|---------|
+| `cookies_missing` | No cookie file found |
+| `session_invalid` | Cookies exist but health check failed |
+| `refresh_failed` | Camoufox re-login failed |
+| `refresh_retry_failed` | Re-login succeeded but fetch still fails |
+| `missing_credentials` | FAP_USERNAME or FAP_PASSWORD not set |
+| `page_unavailable` | FAP returned login/unexpected page |
+| `session_ready` | Session is valid and ready |
+| `fetch_ok` | Fetch succeeded without refresh |
 
----
+### C3: SessionValidator (session_validator.py)
 
-### C4: Notification Service
+**Purpose:** Check session health and trigger refresh when needed.
 
-**Purpose:** Format and send Discord notifications
+**Methods:**
+| Method | Description |
+|--------|-------------|
+| `is_session_valid()` | Check if cookie file exists |
+| `is_session_fresh()` | Check if cookies are less than N hours old |
+| `check_session_health()` | Full health check: file age or aiohttp probe |
+| `refresh_session()` | Run full Camoufox auto-login to refresh session |
 
-**Responsibilities:**
-- Create Discord embeds
-- Send notifications to channels
-- Handle notification failures
-- Track notification history
+**Health Check Modes:**
+- `fast_check=True`: Only checks file age (< 2 hours = fresh)
+- `fast_check=False`: Makes actual HTTP request to FAP and checks for schedule page elements
 
-**Interface:**
-```python
-class NotificationService:
-    def __init__(self, bot):
-        self.bot = bot
+### C4: HTML Parsers (scraper/*_parser.py)
 
-    async def send_schedule_notification(self, user, schedule):
-        # Send evening schedule
+| Parser | File | Output |
+|--------|------|--------|
+| Schedule Parser | `parser.py` | List of class sessions with date, slot, room, attendance |
+| Grade Parser | `grade_parser.py` | Terms, subjects, grades, GPA calculation |
+| Exam Parser | `exam_parser.py` | Exam schedule with date, time, room, type |
+| Attendance Parser | `attendance_parser.py` | Attendance status per date/slot |
 
-    async def send_grade_notification(self, user, grade):
-        # Send grade update
+All parsers use BeautifulSoup4 with lxml backend. They return structured data (dicts/lists) that command handlers format into Discord embeds.
 
-    async def send_exam_reminder(self, user, exam, reminder_type):
-        # Send exam reminder
+### C5: Discord Bot (bot/)
 
-    # ... other notification methods
-```
+| Component | File | Purpose |
+|-----------|------|---------|
+| Bot Core | `bot.py` | Discord client, startup, command sync, scheduler init |
+| Scheduler | `scheduler.py` | Background jobs via APScheduler |
+| Notifier | `notifier.py` | Discord embed formatting and sending |
+| Schedule Commands | `commands/schedule.py` | `/schedule today`, `/schedule week` |
+| Exam Commands | `commands/exam.py` | `/exam schedule`, `/exam upcoming` |
+| Grade Commands | `commands/grade.py` | `/grade view`, `/grade this-term`, `/grade gpa` |
+| Attendance Commands | `commands/attendance.py` | `/attendance view`, `/attendance this-term` |
+| Status Commands | `commands/status.py` | `/status`, `/ping` |
+| Config Commands | `commands/config.py` | `/config channel`, `/config status` |
 
-**Dependencies:** Discord Bot, Embed Templates
+### C6: Background Scheduler (scheduler.py)
 
----
-
-### C5: FAP Client Service
-
-**Purpose:** Wrap all FAP portal interactions
-
-**Responsibilities:**
-- Authenticate with FAP
-- Fetch HTML from FAP pages
-- Handle FlareSolverr integration
-- Manage session/cookies
-- Handle FAP errors
-
-**Interface:**
-```python
-class FAPClient:
-    def __init__(self, username, password):
-        self.username = username
-        self.password = password
-        self.session = None
-
-    async def authenticate(self):
-        # Authenticate and create session
-
-    async def get_schedule(self, week, year):
-        # Fetch schedule HTML
-
-    async def get_grades(self, term):
-        # Fetch grades HTML
-
-    async def get_applications(self):
-        # Fetch applications HTML
-
-    async def get_exams(self):
-        # Fetch exams HTML
-
-    async def close(self):
-        # Cleanup session
-```
-
-**Dependencies:** Playwright, FlareSolverr, BeautifulSoup
-
----
-
-### C6: HTML Parsers
-
-**Purpose:** Parse HTML responses from FAP
-
-**Components:**
-
-#### Schedule Parser
-```python
-class ScheduleParser:
-    @staticmethod
-    def parse_schedule(html_content):
-        # Parse schedule HTML
-        # Returns: List[ScheduleItem]
-
-    @staticmethod
-    def diff_schedules(old, new):
-        # Compare schedules
-        # Returns: List[ScheduleChange]
-```
-
-#### Grade Parser
-```python
-class GradeParser:
-    @staticmethod
-    def parse_grades(html_content):
-        # Parse grades HTML
-        # Returns: List[GradeItem]
-
-    @staticmethod
-    def calculate_gpa(grades, exclusions=None):
-        # Calculate GPA
-        # Returns: GPA breakdown
-```
-
-#### Attendance Parser
-```python
-class AttendanceParser:
-    @staticmethod
-    def parse_attendance(html_content):
-        # Parse attendance from schedule
-        # Returns: Dict[date, slot] -> AttendanceStatus
-```
-
-#### Exam Parser
-```python
-class ExamParser:
-    @staticmethod
-    def parse_exams(html_content):
-        # Parse exam HTML
-        # Returns: List[ExamItem]
-```
-
-#### Application Parser
-```python
-class ApplicationParser:
-    @staticmethod
-    def parse_applications(html_content):
-        # Parse application HTML
-        # Returns: List[ApplicationItem]
-```
-
-**Dependencies:** BeautifulSoup4, lxml, Data Models
-
----
-
-### C7: Database Service
-
-**Purpose:** Manage all database operations
-
-**Responsibilities:**
-- Create database connection
-- Execute queries
-- Manage transactions
-- Handle migrations
-
-**Interface:**
-```python
-class DatabaseService:
-    def __init__(self, db_path):
-        self.engine = create_engine(f"sqlite:///{db_path}")
-
-    def get_user(self, user_id):
-        # Get user by ID
-
-    def create_user(self, user_data):
-        # Create new user
-
-    def save_schedule_cache(self, user, schedule):
-        # Save schedule to cache
-
-    def get_schedule_cache(self, user, week, year):
-        # Get cached schedule
-
-    def save_attendance_state(self, user, attendance):
-        # Save attendance state
-
-    def get_attendance_state(self, user, date, slot):
-        # Get attendance state
-
-    # ... other database operations
-```
-
-**Dependencies:** SQLAlchemy, SQLite
-
----
-
-### C8: Pending Checks Service
-
-**Purpose:** Track and report pending items (waiting grades, upcoming exams, applications)
-
-**Responsibilities:**
-- Compare exam schedule with grades to find waiting items
-- Identify upcoming exams within notification window
-- Track pending applications
-- Provide summary for `/pending-checks` command
-
-**Interface:**
-```python
-class PendingChecksService:
-    def __init__(self, fap_client, database):
-        self.fap_client = fap_client
-        self.database = database
-
-    async def get_waiting_grades(self):
-        # Get subjects with passed exams but no grade
-        # Returns: List[WaitingGradeItem]
-
-    async def get_upcoming_exams(self, days=7):
-        # Get exams within next N days
-        # Returns: List[ExamItem]
-
-    async def get_pending_applications(self):
-        # Get pending applications
-        # Returns: List[ApplicationItem]
-
-    async def get_summary(self):
-        # Get complete summary for display
-        # Returns: PendingChecksSummary
-```
-
-**Dependencies:** FAP Client, Exam Parser, Grade Parser, Database
+| Job | Interval | Description |
+|-----|----------|-------------|
+| Attendance Check | Every 15 min | Monitor current slot for attendance changes, alert Discord |
+| Weekly Check | Sunday 22:00 | Compare grades/schedule/exams with last week, notify changes |
+| Session Keepalive | Every 4 hours | Check session health, trigger re-login if expired |
 
 ---
 
 ## Data Architecture
 
-### Database Schema
+### Storage
 
-```mermaid
-erDiagram
-    USERS ||--o{ SCHEDULE_CACHE : has
-    USERS ||--o{ ATTENDANCE_STATE : tracks
-    USERS ||--o{ GRADE_CACHE : monitors
-    USERS ||--o{ APPLICATION_CACHE : checks
-    USERS ||--o{ EXAM_CACHE : tracks
+| Data | Location | Format | Persistence |
+|------|----------|--------|-------------|
+| Bot Database | `data/fap.db` | SQLite | Persistent (volume mount) |
+| FAP Cookies | `data/fap_cookies.json` | JSON | Backup; browser is primary |
+| Firefox Profile | `data/firefox_profile/` | Firefox profile dir | Cleared on each login |
+| Logs | `logs/` | Text files | Persistent (volume mount) |
 
-    USERS {
-        string user_id PK "Discord ID"
-        string fap_username
-        string fap_password "encrypted"
-        string server_id
-        string channel_id
-        timestamp created_at
-        timestamp last_login
-    }
+### Database Schema (SQLite)
 
-    SCHEDULE_CACHE {
-        integer id PK
-        string user_id FK
-        integer week
-        integer year
-        text html_content
-        timestamp cached_at
-    }
-
-    ATTENDANCE_STATE {
-        integer id PK
-        string user_id FK
-        date date
-        integer slot
-        string subject_code
-        string status
-        boolean notified_15min
-        boolean notified_10min
-        boolean notified_5min
-        timestamp last_checked
-    }
-
-    GRADE_CACHE {
-        integer id PK
-        string user_id FK
-        string term
-        string subject_code
-        string grade
-        timestamp last_checked
-    }
-
-    APPLICATION_CACHE {
-        integer id PK
-        string user_id FK
-        string app_type
-        string purpose
-        string status
-        date created_date
-        timestamp last_checked
-    }
-
-    EXAM_CACHE {
-        integer id PK
-        string user_id FK
-        string subject_code
-        date exam_date
-        string exam_time
-        string room
-        boolean notified_1day
-        boolean notified_1hour
-        timestamp last_checked
-    }
-```
-
-### Data Models
-
-#### User
-```python
-@dataclass
-class User:
-    user_id: str              # Discord user ID
-    fap_username: str         # FAP username
-    fap_password: str         # Encrypted password
-    server_id: str            # Discord server ID
-    channel_id: str           # Notification channel ID
-    created_at: datetime       # Account creation time
-    last_login: datetime       # Last login time
-```
-
-#### Schedule Item
-```python
-@dataclass
-class ScheduleItem:
-    date: date
-    slot: int                 # 1-8
-    subject_code: str
-    subject_name: str
-    room: str
-    start_time: str           # "7:00"
-    end_time: str             # "9:15"
-    attendance_status: str    # "attended", "absent", "-"
-```
-
-#### Grade Item
-```python
-@dataclass
-class GradeItem:
-    term: str
-    subject_code: str
-    subject_name: str
-    grade: float              # None if not graded
-    credits: int
-    status: str               # "Completed", "In Progress"
-```
-
-#### Exam Item
-```python
-@dataclass
-class ExamItem:
-    subject_code: str
-    subject_name: str
-    exam_date: date
-    exam_time: str            # "07h00-09h00"
-    room: str
-    exam_type: str            # "PRACTICAL_EXAM", "Multiple_choices"
-    exam_form: str            # "PE", "FE"
-```
-
-#### Application Item
-```python
-@dataclass
-class ApplicationItem:
-    app_type: str             # "Đề nghị cấp bảng điểm", etc.
-    purpose: str
-    created_date: date
-    status: str               # "Pending", "Approved", "Rejected"
-    process_note: str         # Response from admin
-```
-
-### Data Flow
-
-#### Read Flow (Commands)
-```mermaid
-sequenceDiagram
-    participant User
-    participant DiscordBot
-    participant CommandHandler
-    participant FAPClient
-    participant FlareSolverr
-    participant FAP
-    participant Parser
-    participant Database
-
-    User->>DiscordBot: /grades
-    DiscordBot->>CommandHandler: handle_grades_command()
-    CommandHandler->>Database: get_user()
-    Database-->>CommandHandler: User
-    CommandHandler->>Database: get_cached_grades()
-    Database-->>CommandHandler: Cached grades
-
-    alt Cache is recent (< 1 hour)
-        CommandHandler-->>User: Return cached grades
-    else Cache is stale or missing
-        CommandHandler->>FAPClient: get_grades()
-        FAPClient->>FlareSolverr: Request FAP page
-        FlareSolverr->>FAP: GET /Grade/StudentGrade.aspx
-        FAP-->>FlareSolverr: HTML
-        FlareSolverr-->>FAPClient: HTML
-        FAPClient-->>CommandHandler: HTML
-        CommandHandler->>Parser: parse_grades()
-        Parser-->>CommandHandler: Grade items
-        CommandHandler->>Database: save_grades()
-        CommandHandler-->>User: Return grades
-    end
-```
-
-#### Write Flow (Background Tasks)
-```mermaid
-sequenceDiagram
-    participant Scheduler
-    participant AttendanceMonitor
-    participant FAPClient
-    participant Parser
-    participant Database
-    participant NotificationService
-    participant Discord
-
-    Scheduler->>AttendanceMonitor: check_attendance()
-    AttendanceMonitor->>Database: get_users_with_classes_today()
-    Database-->>AttendanceMonitor: Users
-
-    loop For each user
-        AttendanceMonitor->>FAPClient: get_schedule()
-        FAPClient-->>AttendanceMonitor: HTML
-        AttendanceMonitor->>Parser: parse_schedule()
-        Parser-->>AttendanceMonitor: Schedule items
-
-        loop For each class
-            AttendanceMonitor->>Database: get_attendance_state()
-            Database-->>AttendanceMonitor: Cached status
-
-            alt Status changed
-                AttendanceMonitor->>Database: update_attendance_state()
-                AttendanceMonitor->>NotificationService: notify_attendance_change()
-                NotificationService->>Discord: Send notification
-            end
-        end
-    end
-```
+Key tables:
+- **users** — Discord user ID, FAP credentials (encrypted), notification preferences
+- **schedule_cache** — Cached schedule HTML by week/year
+- **attendance_state** — Attendance tracking per date/slot
+- **grade_cache** — Cached grade data by term
+- **exam_cache** — Cached exam schedule
 
 ---
 
 ## Security Architecture
 
-### Security Principles
+### Password Encryption
+- **Algorithm:** Fernet (AES-128-CBC with HMAC)
+- **Key:** Stored in `ENCRYPTION_KEY` env var
+- **Scope:** FAP passwords stored in database are encrypted
 
-1. **Defense in Depth:** Multiple layers of security
-2. **Least Privilege:** Minimal access required
-3. **Encrypt at Rest:** All sensitive data encrypted
-4. **Secure Communication:** HTTPS for all external calls
-5. **No Credential Logging:** Never log passwords/tokens
+### Credential Handling
+- FAP credentials read from env vars (`FAP_USERNAME`, `FAP_PASSWORD`)
+- Never logged or exposed in error messages
+- Cookies exported to JSON file for backup purposes only
 
-### Security Components
-
-#### S1: Password Encryption
-```python
-class EncryptionService:
-    def __init__(self, key: bytes):
-        self.cipher = Fernet(key)
-
-    def encrypt_password(self, password: str) -> str:
-        # Encrypt password using Fernet
-        encrypted = self.cipher.encrypt(password.encode())
-        return encrypted.decode()
-
-    def decrypt_password(self, encrypted: str) -> str:
-        # Decrypt password
-        decrypted = self.cipher.decrypt(encrypted.encode())
-        return decrypted.decode()
-```
-
-**Algorithm:** Fernet (symmetric encryption using AES-128-CBC)
-**Key Storage:** Environment variable (`ENCRYPTION_KEY`)
-**Key Rotation:** Manual (documented in ops guide)
-
-#### S2: Environment Variable Management
-```bash
-# .env (NEVER commit to git)
-DISCORD_TOKEN=your_discord_bot_token
-FAP_USERNAME=your_fap_username
-FAP_PASSWORD=your_fap_password
-ENCRYPTION_KEY=your_fernet_key
-```
-
-**Best Practices:**
-- Never commit `.env` to version control
-- Use `.env.example` as template
-- Rotate keys regularly
-- Use different keys for dev/prod
-
-#### S3: SQL Injection Prevention
-```python
-# BAD: String concatenation
-query = f"SELECT * FROM users WHERE user_id = '{user_id}'"
-
-# GOOD: Parameterized queries
-query = "SELECT * FROM users WHERE user_id = :user_id"
-result = session.execute(query, {"user_id": user_id})
-```
-
-**ORM Protection:** SQLAlchemy automatically parameterizes queries
-
-#### S4: Input Sanitization
-```python
-def sanitize_user_input(input_string: str) -> str:
-    # Remove potentially dangerous characters
-    return input_string.strip()[:1000]  # Limit length
-```
+### Environment Variables
+- `.env` file is never committed to git (in `.gitignore`)
+- All secrets injected via Docker Compose environment section
+- Different keys for development and production
 
 ---
 
 ## Integration Architecture
 
-### I1: FAP Portal Integration
+### I1: FAP Portal via Camoufox
 
-**Protocol:** HTTPS via Playwright browser automation
+```
+Bot -> Camoufox Browser -> FAP Portal
 
-**Authentication Flow:**
-```mermaid
-sequenceDiagram
-    participant Bot
-    participant FlareSolverr
-    participant FAP
-    participant Bot
-
-    Bot->>FlareSolverr: POST /v1 (FAP URL)
-    FlareSolverr->>FAP: GET /Account/Login.aspx
-    FAP-->>FlareSolverr: Login page + Cloudflare challenge
-    FlareSolverr-->>Bot: HTML (challenge solved)
-
-    Bot->>Bot: Fill FeID form
-    Bot->>FlareSolverr: POST /v1 (submit form)
-    FlareSolverr->>FAP: POST /Account/Login.aspx
-    FAP-->>FlareSolverr: Redirect + Set-Cookie
-    FlareSolverr-->>Bot: Cookies
-    Bot->>Bot: Save cookies for reuse
+Flow:
+1. Launch Camoufox (Firefox anti-detect) with:
+   - Clean profile (cleared before each login)
+   - Residential proxy
+   - Virtual display (Xvfb or built-in)
+2. Navigate to https://fap.fpt.edu.vn/Default.aspx
+3. Wait for Cloudflare Turnstile challenge (up to 60 seconds)
+4. Click Turnstile checkbox in challenges.cloudflare.com iframe
+5. Select campus from dropdown
+6. Click "Login With FeID" button
+7. FeID SSO redirect -> identity.fpt.edu.vn
+8. Fill username + password form
+9. Submit -> OAuth redirect back to FAP
+10. Browser stays open for data fetching
 ```
 
-**Session Management:**
-- Cookies saved to `data/fap_cookies.json`
-- Cookie expiry: 7 days
-- Auto-refresh on 401 errors
+### I2: Discord API
 
-**Rate Limiting:**
-- Max 1 request/second
-- Exponential backoff on errors
-- Request queue for concurrent operations
+```
+Bot -> discord.py -> Discord Gateway (WebSocket)
 
-### I2: Discord API Integration
-
-**Gateway:** Discord.py library
-
-**Command Registration:**
-```python
-async def setup_hook(self):
-    # Sync slash commands
-    synced = await self.tree.sync()
-    logger.info(f"Synced {len(synced)} commands")
+- Slash commands registered via bot.tree.sync()
+- Responses via interaction.response.send_message()
+- Notifications via channel.send(embed=...)
+- Rate limiting handled by discord.py internally
 ```
 
-**Notification Delivery:**
-```python
-async def send_notification(self, channel_id, embed):
-    channel = self.get_channel(channel_id)
-    if channel:
-        await channel.send(embed=embed)
+### I3: Session Management Flow
+
 ```
+1. get_session() called
+2. Check if cookie file exists
+   |- No: trigger auto-login via Camoufox
+   |- Yes: check session health
+      |- Healthy: return session
+      |- Expired: trigger refresh
 
-**Error Handling:**
-- Rate limit: Automatic retry with `Retry-After` header
-- Permissions: Check before sending
-- Network errors: Retry 3 times with exponential backoff
-
-### I3: FlareSolverr Integration
-
-**Deployment:** Docker container
-
-**Configuration:**
-```yaml
-# docker-compose.yml
-flaresolverr:
-  image: flaresolverr/flaresolverr:latest
-  ports:
-    - "8191:8191"
-  environment:
-    - LOG_LEVEL=info
-    - HEADLESS=true
-```
-
-**API Usage:**
-```python
-async def fetch_via_flaresolverr(url):
-    payload = {
-        "url": url,
-        "cmd": "request.get",
-        "maxTimeout": 60000
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "http://localhost:8191/v1",
-            json=payload
-        ) as response:
-            return await response.json()
+Refresh flow:
+1. Acquire asyncio lock (prevent concurrent refresh)
+2. Close existing browser
+3. Clear Firefox profile
+4. Launch new Camoufox instance
+5. Run full login flow
+6. Return success/failure
+7. Release lock
 ```
 
 ---
 
 ## Deployment Architecture
 
-### D1: Container Strategy
+### Single Container Design
 
-```mermaid
-graph TB
-    subgraph "DigitalOcean Droplet"
-        Docker[Docker Engine]
-
-        subgraph "Bot Container"
-            BotApp[FAP Bot App]
-            BotData[Data Volume]
-        end
-
-        subgraph "FlareSolverr Container"
-            Flare[FlareSolverr]
-        end
-
-        subgraph "Network"
-            Network[Bridge Network]
-        end
-    end
-
-    Docker --> BotApp
-    Docker --> Flare
-    BotApp --> BotData
-    BotApp -.->|HTTP| Flare
-    BotApp -.->|Network| Flare
-```
-
-**Container Images:**
-- Bot: `fap-discord-bot:latest` (built from source)
-- FlareSolverr: `flaresolverr/flaresolverr:latest` (official)
-
-**Volumes:**
-- `./data:/app/data` - Persistent data directory
-- Contains: `fap.db`, `fap_cookies.json`, logs
-
-### D2: DigitalOcean Configuration
-
-**Droplet Spec:**
-- **Region:** Singapore (sgp1) - closest to Vietnam
-- **Size:** Basic $6/month (1 vCPU, 1GB RAM, 25GB SSD)
-- **OS:** Ubuntu 22.04 LTS
-- **SSH Key:** Uploaded public key
-
-**Docker Compose:**
 ```yaml
-version: '3.8'
-
 services:
   bot:
     build: .
@@ -989,262 +429,138 @@ services:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - FAP_USERNAME=${FAP_USERNAME}
       - FAP_PASSWORD=${FAP_PASSWORD}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - HEADLESS=false
+      - PROXY_URL=${PROXY_URL:-}
     volumes:
       - ./data:/app/data
-    depends_on:
-      - flaresolverr
-    networks:
-      - bot-network
-
-  flaresolverr:
-    image: flaresolverr/flaresolverr:latest
-    container_name: flaresolverr
-    restart: unless-stopped
-    ports:
-      - "8191:8191"
-    networks:
-      - bot-network
-
-networks:
-  bot-network:
-    driver: bridge
+      - ./logs:/app/logs
 ```
 
----
-
-## Scalability Considerations
-
-### Current Scale (MVP)
-
-| Metric | Target | Architecture |
-|--------|--------|--------------|
-| Users | 1-10 | Single SQLite DB |
-| Notifications/hr | < 100 | Single scheduler |
-| DB Size | < 100MB | SQLite file |
-| Memory | < 512MB | Single container |
-
-### Future Scale (Post-MVP)
-
-| Metric | Target | Required Changes |
-|--------|--------|------------------|
-| Users | 10-100 | Postgres + Connection pooling |
-| Notifications/hr | 100-1000 | Task queue (Celery/Redis) |
-| DB Size | 100MB-1GB | Postgres + partitioning |
-| Memory | 512MB-2GB | Horizontal scaling |
-
-### Scaling Path
+### Runtime Architecture in Container
 
 ```
-Phase 1 (MVP):
-  ┌─────────────────────────────────┐
-  │  Single Container                │
-  │  ┌─────────────────────────────┐│
-  │  │ Bot + SQLite + Scheduler    ││
-  │  └─────────────────────────────┘│
-  └─────────────────────────────────┘
-          ↓
-Phase 2 (10-100 users):
-  ┌─────────────────────────────────┐
-  │  Bot Container + FlareSolverr    │
-  │  ┌─────────────────────────────┐│
-  │  │ Bot + Postgres              ││
-  │  │ + Redis Cache               ││
-  │  └─────────────────────────────┘│
-  └─────────────────────────────────┘
-          ↓
-Phase 3 (100+ users):
-  ┌─────────────────────────────────┐
-  │  Load Balancer                  │
-  │  ┌─────────┬─────────┬─────────┐│
-  │  │Bot 1    │Bot 2    │Bot N    ││
-  │  └─────────┴─────────┴─────────┘│
-  │  ┌─────────────────────────────┐│
-  │  │ Postgres + Redis Cluster    ││
-  │  │ + Celery Task Queue         ││
-  │  └─────────────────────────────┘│
-  └─────────────────────────────────┘
+Container: fap-discord-bot
+|
++-- Xvfb :99 (virtual display, started by CMD)
+|     |
++-- Python (main.py)
+      |
+      +-- Discord Bot (discord.py async loop)
+      |     |
+      |     +-- Command Handlers
+      |     +-- Background Scheduler
+      |
+      +-- FAPAutoLogin
+            |
+            +-- Camoufox (Firefox)
+                  |- Profile: /app/data/firefox_profile/
+                  |- Proxy: from PROXY_URL env
+                  |- Display: :99 or virtual
 ```
+
+### Server Details
+
+| Item | Value |
+|------|-------|
+| **Provider** | DigitalOcean |
+| **Region** | Singapore (sgp1) |
+| **Droplet** | Basic 1GB ($6/mo) |
+| **OS** | Ubuntu 22.04 LTS |
+| **Project Path** | /opt/fap-bot/ |
+| **Container** | fap-discord-bot |
 
 ---
 
 ## Technology Stack
 
-### Backend Framework
 | Component | Technology | Version |
 |-----------|-----------|---------|
 | Language | Python | 3.11+ |
-| Bot Framework | discord.py | 2.3.2+ |
-| Browser Automation | patchright | 1.40.0+ |
-| HTML Parsing | beautifulsoup4 | 4.12.2+ |
-| HTML Parser | lxml | 4.9.3+ |
-
-### Background Tasks
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| Scheduler | apscheduler | 3.10.0+ |
-| Async Runtime | asyncio | Built-in |
-
-### Data Layer
-| Component | Technology | Version |
-|-----------|-----------|---------|
+| Bot Framework | discord.py | 2.7+ |
+| Browser Automation | Camoufox | 0.4+ (Firefox-based anti-detect) |
+| HTML Parsing | BeautifulSoup4 | 4.12+ |
+| HTML Parser Backend | lxml | 4.9+ |
+| Scheduler | APScheduler | 3.10+ |
+| Data Validation | Pydantic | 2.x |
 | Database | SQLite | Built-in |
-| ORM | SQLAlchemy | 2.0.0+ |
-| Encryption | cryptography | 41.0.0+ |
-
-### DevOps
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| Container | Docker | Latest |
-| Container Orchestration | docker-compose | Latest |
-| Cloud Provider | DigitalOcean | - |
-| Deployment | Bash scripts | - |
+| Encryption | cryptography (Fernet) | 41.0+ |
+| Container | Docker + Docker Compose | Latest |
+| Virtual Display | Xvfb | System package |
+| Server | DigitalOcean Droplet | Basic 1GB |
 
 ---
 
 ## Design Decisions
 
-### DD-1: SQLite vs PostgreSQL
+### DD-1: Camoufox (Firefox) over Playwright (Chromium)
 
-**Decision:** SQLite for MVP
+| Factor | Camoufox (Firefox) | Playwright/patchright (Chromium) |
+|--------|-------------------|----------------------------------|
+| TLS Fingerprint | Harder to detect | Well-documented, easier to detect |
+| Cloudflare Bypass | Works with residential proxy | Fails on datacenter IPs |
+| Anti-detection | Built-in (humanize, fingerprint randomization) | Requires manual patches |
+| Cloudflare on datacenter | Fails without proxy | Fails regardless of proxy |
 
-**Rationale:**
-| Factor | SQLite | PostgreSQL |
-|--------|--------|------------|
-| Setup | Zero config | Requires server |
-| Backup | File copy | pg_dump |
-| Performance | Sufficient for <100 users | Required for 100+ users |
-| Scalability | Requires migration | Scales horizontally |
-| Complexity | Low | Medium |
+### DD-2: Browser Stays Open vs Cookie Reuse
 
-**Migration Path:** SQLAlchemy ORM makes migration to Postgres straightforward
+| Factor | Browser Open | Cookie Reuse |
+|--------|-------------|--------------|
+| Reliability | 100% (same TLS context) | 0% (TLS mismatch) |
+| Resource Usage | ~300-400MB RAM constant | ~50MB, spikes during login |
+| Complexity | Low (page.goto) | High (cookie management) |
 
----
+**Decision:** Keep browser open. Tried cookie reuse with aiohttp and curl_cffi — both failed with 403.
 
-### DD-2: Async vs Sync
+### DD-3: Profile Cleanup Before Login
 
-**Decision:** Async (asyncio)
+| Factor | Fresh Profile | Persistent Profile |
+|--------|--------------|-------------------|
+| Cloudflare detection | Less likely | Accumulates fingerprints |
+| Login speed | Slower (re-solve CF) | Faster (CF already solved) |
+| Reliability | High | Degrades over time |
 
-**Rationale:**
-| Factor | Async | Sync |
-|--------|-------|------|
-| Concurrency | Native | Requires threads |
-| I/O Wait | Non-blocking | Blocking |
-| Discord API | Native support | Requires wrapper |
-| Complexity | Medium | Low |
-
-**Trade-off:** Async code is slightly more complex but handles I/O-bound tasks efficiently
+**Decision:** Clean profile before each login. Stability > speed.
 
 ---
 
-### DD-3: Monolith vs Microservices
+## Lessons Learned
 
-**Decision:** Monolith (for MVP)
+### 1. Cloudflare Turnstile is IP-Reputation First
 
-**Rationale:**
-| Factor | Monolith | Microservices |
-|--------|----------|---------------|
-| Deployment | Single container | Multiple containers |
-| Debugging | Easier | Harder |
-| Development | Faster | Slower |
-| Scaling | Vertical only | Horizontal |
+No browser trick can overcome a datacenter IP. Turnstile checks IP reputation before browser fingerprinting. Residential proxy is the #1 requirement.
 
-**Migration Path:** Extract services when individual components need scaling
+### 2. TLS Fingerprint Ties Cookies to Browser
 
----
+`cf_clearance` is bound to the JA3/JA4 fingerprint. Extracting cookies and using them with a different HTTP client always fails. The browser that solves the challenge must make all subsequent requests.
 
-### DD-4: Fernet vs AES-GCM
+### 3. FAP Session Expiry is Silent
 
-**Decision:** Fernet for password encryption
+FAP doesn't return 401 or error JSON when session expires. It redirects to `Default.aspx` with HTTP 200. The login page HTML looks like a valid response unless you check content specifically. Four validation checks are needed: URL redirect, Login URL, login button presence, and Cloudflare challenge title.
 
-**Rationale:**
-| Factor | Fernet | AES-GCM |
-|--------|--------|---------|
-| Complexity | Low | Medium |
-| Key Management | Single key | Key derivation |
-| Integrity | Built-in | Separate HMAC |
-| Speed | Sufficient | Faster |
+### 4. Firefox Anti-Detect Beats Chromium Anti-Detect
 
-**Trade-off:** Fernet is slightly slower but provides everything needed
+Three browser iterations (FlareSolverr/Chrome -> patchright/Chromium -> Camoufox/Firefox) showed that Firefox's TLS fingerprint is inherently harder for Cloudflare to classify as bot-like.
 
----
+### 5. Docker Environment Quirks
 
-## Trade-offs
+- `.env` file values are literal (no `$` escaping)
+- `docker-compose.yml` environment section does variable substitution (escape `$` to `$$`)
+- `docker restart` does NOT reload `.env`
+- Always use `docker compose up -d --force-recreate` after env changes
 
-### TO-1: Polling vs Webhooks
+### 6. Shared Browser Instance Prevents Profile Lock
 
-| Aspect | Polling (Chosen) | Webhooks |
-|--------|------------------|----------|
-| Server Load | Higher | Lower |
-| Timeliness | 5-min delay | Instant |
-| Complexity | Simple | Complex |
-| FAP Support | Works | Not available |
+Running two Camoufox instances with the same profile directory causes lock contention. Share one `FAPAutoLogin` instance between `FAPAuth` and `SessionValidator`, and close the old browser before launching a new one.
 
-**Trade-off:** Accept higher server load for simplicity
+### 7. Vietnamese Cloudflare Titles
+
+Cloudflare challenge page title is "Cho mot chut..." in Vietnamese. Code must check both English and Vietnamese keywords, or better yet, wait for actual page content (login button, schedule dropdown) rather than relying on title checks.
+
+### 8. Xvfb Readiness Race Condition
+
+Starting Xvfb and immediately launching the browser can race — browser tries to connect before Xvfb is ready. The CMD waits for the X11 lock file: `until [ -e /tmp/.X99-lock ]; do sleep 0.1; done`
 
 ---
 
-### TO-2: Single Channel vs Multi-Channel
-
-| Aspect | Single Channel (Chosen) | Multi-Channel |
-|--------|-------------------------|---------------|
-| Setup | Simple | Complex |
-| Privacy | Public (if server) | DM possible |
-| Flexibility | Limited | High |
-
-**Trade-off:** Simpler setup for MVP, DM support in Phase 2
-
----
-
-### TO-3: Cache Expiry
-
-| Data Type | Expiry Policy | Rationale |
-|------------|---------------|-----------|
-| Schedule | 7 days | Changes infrequently |
-| Grades | Current term | Historical doesn't change |
-| Attendance | Current term | History doesn't change |
-| Applications | 30 days | Archive reference |
-| Exams | Until passed | No longer relevant |
-
-**Trade-off:** Balance between storage and data freshness
-
----
-
-## Appendix
-
-### A. System Constraints
-
-| Constraint | Limit | Impact |
-|------------|-------|--------|
-| Discord Rate Limit | 50 messages/second | Queue notifications |
-| FAP Rate Limit | Unknown (observed: ~1 req/sec) | Throttle requests |
-| SQLite Concurrent Writes | 1 writer | Queue write operations |
-| FlareSolverr Concurrent Sessions | ~10 | Limit concurrent FAP requests |
-
-### B. Non-Functional Requirements Summary
-
-| Requirement | Target | Measurement |
-|-------------|--------|-------------|
-| Availability | > 99% | Uptime monitoring |
-| Performance | < 5 min latency | Notification timestamp |
-| Scalability | 10-100 users | User count |
-| Security | Encrypted credentials | Security audit |
-| Maintainability | < 1 day bug fix | Lead time metric |
-
-### C. Architecture Decision Records
-
-| ID | Decision | Date | Status |
-|----|----------|------|--------|
-| ADR-001 | Use SQLite for MVP | 2026-03-07 | Accepted |
-| ADR-002 | Use asyncio for concurrency | 2026-03-07 | Accepted |
-| ADR-002 | Deploy as single container | 2026-03-07 | Accepted |
-
-### D. Related Documents
-- PRD: Product Requirements
-- Tech Spec: Implementation Guide
-- Brainstorming Session: Discussion notes
-
----
-
-**Document Status:** ✅ Ready for Review
-**Next Steps:** Technical Specification → Implementation → Testing
+**Document Status:** Updated
+**Last Updated:** 2026-05-14

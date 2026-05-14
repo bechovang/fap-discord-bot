@@ -336,7 +336,69 @@ Khởi động Xvfb và ngay lập tức mở browser có thể gây race condit
 Xvfb :99 -screen 0 1280x720x24 & until [ -e /tmp/.X99-lock ]; do sleep 0.1; done; python main.py
 ```
 
-### 8. Scheme Proxy HTTPS vs HTTP
+### 8. Phát hiện phiên hết hạn — login HTML trả về như dữ liệu hợp lệ
+
+Khi FAP session hết hạn, server redirect về `Default.aspx` (trang login). Nhưng code `_fetch_page()` chỉ kiểm tra URL chứa "Login" — `Default.aspx` không có chữ "Login" nên HTML của trang login được trả về như dữ liệu hợp lệ. Parser không tìm thấy schedule table hay grade container, trả về rỗng, và user thấy "No classes scheduled!" hay "No terms found" dù fetch "thành công".
+
+**Fix**: Thêm 4 kiểm tra trong `_fetch_page()`:
+1. URL redirect về `Default.aspx` (không phải URL request ban đầu)
+2. URL chứa "Login" (nhưng không phải ScheduleOfWeek)
+3. Page content chứa `btnloginFeId` (nút login)
+4. Tiêu đề vẫn là Cloudflare challenge
+
+Khi trả về `None`, `auth.py` tự động trigger session refresh và retry fetch.
+
+**Bài học**: Khi fetch dữ liệu từ site yêu cầu xác thực, luôn kiểm tra rằng nội dung trả về **là dữ liệu thật**, không chỉ là "không lỗi HTTP". Redirect lên trang login là dấu hiệu session hết hạn phổ biến nhất.
+
+### 9. Xóa Firefox profile trước khi login — tránh Cloudflare flagging
+
+Firefox persistent profile tích lũy cookies, history, và fingerprints theo thời gian. Cloudflare sử dụng những dấu vết này để đánh dấu trình duyệt là bot. Tương tự như việc mở tab ẩn danh (incognito) để login thủ công sẽ không bị lỗi Turnstile.
+
+**Fix**: Xóa toàn bộ profile directory trước mỗi lần login:
+```python
+if self.profile_dir.exists():
+    shutil.rmtree(self.profile_dir, ignore_errors=True)
+self.profile_dir.mkdir(parents=True, exist_ok=True)
+```
+
+**Bài học**: Với anti-detect browser, profile "sạch" (fresh) luôn đáng tin cậy hơn profile persistent. Persistent profile có lợi cho giữ session giữa các lần chạy, nhưng tăng nguy cơ bị fingerprint.
+
+### 10. Xung đột DISPLAY giữa Xvfb ngoài và Camoufox virtual mode
+
+Camoufox hỗ trợ `headless="virtual"` — dùng built-in Xvfb (virtual display). Nhưng `DISPLAY=:99` env var (cho Xvfb ngoài trong Dockerfile CMD) xung đột với virtual display nội bộ của Camoufox, gây lỗi `cannot open display: :99` hoặc crash.
+
+**Fix**: Xóa DISPLAY env var khi dùng virtual mode:
+```python
+if headless_mode == "virtual":
+    os.environ.pop("DISPLAY", None)
+```
+
+**Bài học**: Khi container chạy cả Xvfb riêng (trong CMD) và Camoufox virtual mode, hai display server cạnh tranh. Nên chọn một: hoặc Xvfb ngoài + `headless=False`, hoặc không Xvfb + `headless="virtual"`.
+
+### 11. `docker restart` không áp dụng thay đổi `.env`
+
+`docker restart` chỉ restart container hiện tại với environment cũ. Thay đổi trong `.env` chỉ được load khi tạo container mới.
+
+**Fix**: Dùng `docker compose up -d --force-recreate` thay vì `docker restart`:
+```bash
+cd /opt/fap-bot && docker compose up -d --force-recreate
+```
+
+**Bài học**: Sau khi sửa `.env`, luôn recreate container. `docker restart` = restart process, `docker compose up -d --force-recreate` = tạo container mới với env mới.
+
+### 12. `.env` file: `$` KHÔNG cần escape (khác với `docker-compose.yml`)
+
+Docker Compose xử lý `$` khác nhau tùy ngữ cảnh:
+- **`docker-compose.yml`**: `$VAR` là biến substitution → phải escape `$$` cho literal `$`
+- **`.env` file**: Giá trị được đọc nguyên văn (literal) → `$` không cần escape
+
+Ví dụ: mật khẩu `Eg8$Fw1$`:
+- `.env` file: `FAP_PASSWORD=Eg8$Fw1$` (đúng)
+- `docker-compose.yml` environment section: `FAP_PASSWORD=Eg8$$Fw1$$` (phải escape)
+
+**Bài học**: Hiểu rõ ngữ cảnh: `.env` file values là literal strings, `docker-compose.yml` values undergo variable substitution.
+
+### 13. Scheme Proxy HTTPS vs HTTP
 
 Proxy loại "HTTPS" tạo nhầm lẫn — nó nghĩa là proxy hỗ trợ **traffic HTTPS**, không phải kết nối đến proxy bằng HTTPS.
 
@@ -355,12 +417,16 @@ SSL: UNEXPECTED_EOF_WHILE_READING
 |---|---|
 | `Failed to fetch schedule: refresh retry still could not access FAP` | Phiên hết hạn và re-login thất bại. Kiểm tra logs xem lỗi Turnstile hay FeID. |
 | Cloudflare challenge không resolve | Cần residential proxy. Datacenter IP bị Turnstile chặn. |
-| FeID login "incorrect password" | Kiểm tra escape password trong `.env` — escape `$` thành `$$`. |
+| FeID login "incorrect password" | Kiểm tra password trong `.env`. **Không** escape `$` trong `.env` file (chỉ escape `$$` trong `docker-compose.yml`). |
 | `TargetClosedError` khi mở browser | Thiếu Firefox dependencies. Kiểm tra Dockerfile có `libgtk-3-0 libx11-xcb1 libasound2`. |
-| Browser timeout khi khởi động | Profile lock cũ. Xóa `data/firefox_profile/SingletonLock` files. |
+| Browser timeout khi khởi động | Profile lock cũ. Code tự xóa profile trước login, nhưng nếu vẫn lỗi, xóa thủ công `data/firefox_profile/`. |
 | `No space left on device` khi build | Docker images cũ. Chạy `docker system prune -af --volumes`. |
 | Điểm danh/điểm trả về rỗng | Cài `FAP_STUDENT_ID` và `FAP_CAMPUS` trong `.env`. |
 | `SSL: UNEXPECTED_EOF_WHILE_READING` | Proxy scheme sai. Dùng `http://` thay vì `https://`. |
+| "No classes scheduled!" / "No terms found" dù bot hoạt động | Session FAP hết hạn. `_fetch_page()` nhận login page thay vì data. Bot tự re-login. Nếu vẫn lỗi, restart container. |
+| `cannot open display: :99` | Xung đột DISPLAY. Đảm bảo `HEADLESS=true` trong `.env` để dùng Camoufox virtual mode. |
+| Thay đổi `.env` không có hiệu lực | `docker restart` không reload env. Dùng `docker compose up -d --force-recreate`. |
+| Cloudflare flagging liên tục | Firefox profile cũ bị fingerprint. Code tự xóa profile, nhưng đảm bảo không có process Camoufox khác đang chạy. |
 
 ---
 
