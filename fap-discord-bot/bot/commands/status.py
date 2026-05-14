@@ -85,6 +85,28 @@ class StatusCommands(commands.Cog):
             embed.add_field(name="Users", value=str(sum(g.member_count for g in self.bot.guilds)), inline=True)
             embed.add_field(name="Session Detail", value=session_detail[:1024], inline=False)
 
+            # Scheduler info
+            scheduler = getattr(self.bot, 'scheduler', None)
+            if scheduler and scheduler.scheduler.running:
+                now = datetime.now()
+                jobs_info = []
+                for job in scheduler.scheduler.get_jobs():
+                    next_run = job.next_run_time
+                    if next_run:
+                        delta = next_run.replace(tzinfo=None) - now
+                        total_sec = max(0, int(delta.total_seconds()))
+                        h, r = divmod(total_sec, 3600)
+                        m, s = divmod(r, 60)
+                        eta = f"{h}h {m}m" if h > 0 else f"{m}m {s}s"
+                    else:
+                        eta = "paused"
+                    jobs_info.append(f"**{job.name}** — next: {eta}")
+
+                sched_text = "\n".join(jobs_info) if jobs_info else "No jobs"
+                embed.add_field(name="Scheduler", value=sched_text, inline=False)
+            else:
+                embed.add_field(name="Scheduler", value="Not running", inline=False)
+
             embed.set_footer(text=f"Requested by {interaction.user.display_name}")
 
             await interaction.response.send_message(embed=embed)
