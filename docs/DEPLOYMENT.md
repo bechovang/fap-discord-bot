@@ -385,6 +385,23 @@ PROXY_URL=http://username:password@proxy-host:port
 
 **Important:** Always use `http://` scheme, even for "HTTPS" proxies. The scheme refers to the connection TO the proxy, not the traffic through it. Using `https://` causes `SSL: UNEXPECTED_EOF_WHILE_READING`.
 
+### Runtime Proxy Change from Discord
+
+The bot now supports proxy rotation directly from Discord without editing `.env`.
+
+Available commands:
+
+- `/config proxy` - Set a runtime proxy override and immediately test session refresh/login
+- `/config proxy-clear` - Remove the runtime override and fall back to `PROXY_URL` from `.env`
+- `/config status` - Show the currently active proxy summary
+
+How it works:
+
+- The runtime override is stored in `data/runtime_config.json`
+- This override takes precedence over `PROXY_URL` from `.env`
+- Provider labels like `HTTPS` should still be entered as `http://user:pass@host:port` internally
+- The command response shows whether an immediate refresh/login attempt succeeded
+
 ### Changing Proxy on Production
 
 ```bash
@@ -393,12 +410,14 @@ ssh root@YOUR_IP
 cd /opt/fap-bot
 nano .env  # Update PROXY_URL
 
-# Recreate container
-docker compose up -d --force-recreate
+# Rebuild and recreate container
+docker compose up -d --build --force-recreate bot
 
 # Check logs for proxy usage
 docker logs fap-discord-bot --tail 30 | grep -i proxy
 ```
+
+Prefer `/config proxy` when you need a fast proxy switch during the day. Edit `.env` when you want the new proxy to survive container rebuilds and remain the baseline configuration.
 
 ### Proxy Providers
 
@@ -430,6 +449,10 @@ docker logs fap-discord-bot 2>&1 | grep -i error  # Errors only
 # Restart / Redeploy
 docker compose up -d --force-recreate              # Recreate with new env
 docker compose up -d --build --force-recreate      # Rebuild + recreate
+
+# Important:
+# This project copies source code into the image at build time.
+# If you changed Python code, use `--build --force-recreate`, not only `--force-recreate`.
 
 # Cleanup
 docker system prune -af --volumes                  # Free disk space
@@ -510,7 +533,7 @@ docker logs fap-discord-bot --tail 50 | grep -i "redirect\|expired\|login button
 
 **Solution:** The code now detects expired sessions automatically (4 checks in `_fetch_page()`) and triggers re-login. If it persists:
 1. Check if proxy is still active: `docker logs fap-discord-bot | grep -i proxy`
-2. Force re-login: `docker compose up -d --force-recreate`
+2. Force re-login: `docker compose up -d --build --force-recreate bot`
 
 #### Issue 2: FeID Login Error "incorrect username or password"
 
@@ -546,7 +569,7 @@ docker logs fap-discord-bot | grep -i "cloudflare\|turnstile\|challenge"
    ```bash
    curl -x http://user:pass@proxy:port https://fap.fpt.edu.vn -I
    ```
-3. Replace expired proxy in `.env` and recreate container
+3. Replace expired proxy in `.env` and rebuild the container, or switch immediately with `/config proxy`
 4. Ensure using `http://` scheme (not `https://`) for proxy URL
 
 #### Issue 4: "cannot open display: :99"

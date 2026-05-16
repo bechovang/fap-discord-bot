@@ -10,7 +10,9 @@ Discord bot for viewing FPT University FAP data. Supports schedule, exams, grade
 - Auto-refresh with retry when a fetch fails because the session expired
 - Schedule, exam, grade, and attendance fetching and parsing
 - Interactive grade/attendance views with Discord UI components
-- Background scheduler: attendance monitoring, weekly reports, session keepalive
+- Background scheduler: attendance monitoring, daily reports, session keepalive
+- Discord auth notifications for every login/refresh success or failure
+- Runtime proxy override via Discord slash commands
 - Global async lock in `scraper/auth.py` to avoid concurrent browser conflicts
 - Shared `FAPAutoLogin` instance between `FAPAuth` and `SessionValidator`
 
@@ -61,7 +63,11 @@ PROXY_URL=http://user:pass@host:port  # Required for datacenter IPs
 /ping                            Connectivity check
 /config channel                  Set notification channel
 /config status                   Show config
+/config proxy                    Set runtime proxy and test re-login
+/config proxy-clear              Clear runtime proxy override
 ```
+
+`/config proxy` stores a runtime override in `data/runtime_config.json`. This allows fast proxy rotation from Discord without editing `.env` or SSHing into the server.
 
 ## Architecture
 
@@ -94,6 +100,13 @@ scraper/
   fap_scraper.py     Legacy scraper interface
 data/                Runtime data (cookies, snapshots, DB)
 ```
+
+## Scheduler Behavior
+
+- Attendance check runs every 15 minutes.
+- Daily check runs every day and sends either detected changes or a "no changes" summary.
+- Session keepalive runs every 15 minutes and performs a real session validation so transient proxy recovery can trigger automatic re-login quickly.
+- Login/refresh attempts also produce Discord notifications.
 
 ## Troubleshooting
 

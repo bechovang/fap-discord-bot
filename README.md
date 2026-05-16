@@ -448,3 +448,35 @@ SSL: UNEXPECTED_EOF_WHILE_READING
 ## License
 
 MIT
+
+---
+
+## 2026-05 Operational Update
+
+The current production behavior differs from some older sections above:
+
+- Session keepalive now runs every 15 minutes.
+- Command fetch failures now go through centralized session recovery and can force re-login when the browser context is gone.
+- Login and refresh attempts send Discord notifications for both success and failure.
+- Attendance and daily scheduler jobs can also send Discord notifications when no change was detected.
+- Runtime proxy override is supported through Discord slash commands and is stored in `data/runtime_config.json`.
+
+New slash commands:
+
+- `/config proxy`
+- `/config proxy-clear`
+
+Example:
+
+```text
+/config proxy host:42.117.104.123 port:34640 username:muaproxy6a0460879cc96 password:MJIRbFDty14IoFHX proxy_type:HTTPS
+```
+
+Important proxy rule:
+
+- Even if the provider labels the proxy type as `HTTPS`, this project must still connect to the proxy using `http://user:pass@host:port`.
+
+Important deployment rule:
+
+- If Python code changed, use `docker compose up -d --build --force-recreate bot`.
+- `docker compose up -d --force-recreate` alone is not enough for code changes because source code is baked into the image.
