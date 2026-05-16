@@ -417,4 +417,10 @@ class FAPAuth:
 
     async def close(self):
         """Close browser and cleanup"""
-        pass
+        if self._auth is not None:
+            try:
+                await self._auth.close()
+            except Exception as exc:
+                logger.error(f"Error while closing auth browser: {exc}")
+        self._auth = None
+        self._validator = None

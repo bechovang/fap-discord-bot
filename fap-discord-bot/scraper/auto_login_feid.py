@@ -12,6 +12,7 @@ from typing import Optional
 
 import aiohttp
 from camoufox.async_api import AsyncCamoufox
+from runtime_config import get_proxy_url
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class FAPAutoLogin:
             disable_coop=True,  # Allow clicking cross-origin iframes (Turnstile)
         )
 
-        proxy_url = os.environ.get("PROXY_URL")
+        proxy_url = get_proxy_url() or os.environ.get("PROXY_URL")
         if proxy_url:
             from urllib.parse import urlparse
             parsed = urlparse(proxy_url)
