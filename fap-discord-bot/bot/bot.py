@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scraper.auth import FAPAuth
+from bot.notifier import send_to_all_guilds
 from bot.commands.schedule import setup as setup_schedule
 from bot.commands.status import setup as setup_status, StatusCommands
 from bot.commands.exam import setup as setup_exam
@@ -51,6 +52,32 @@ class FAPBot(commands.Bot):
         self.status_cog: StatusCommands = None
         self.scheduler: FAPScheduler = None
 
+    async def _handle_auth_event(self, event: dict):
+        """Forward auth lifecycle events to Discord."""
+        status = event.get("status", "info")
+        detail = event.get("detail", "No detail provided.")
+        reason = event.get("reason", "unknown")
+
+        color = (
+            discord.Color.green()
+            if status == "success"
+            else discord.Color.red()
+            if status == "error"
+            else discord.Color.gold()
+        )
+        icon = "✅" if status == "success" else "❌" if status == "error" else "ℹ️"
+
+        embed = discord.Embed(
+            title=f"{icon} FAP Login Update",
+            description=detail,
+            color=color,
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.add_field(name="Reason", value=str(reason), inline=True)
+        embed.add_field(name="Result", value=str(status).upper(), inline=True)
+
+        await send_to_all_guilds(self, embed)
+
     async def setup_hook(self):
         """Initialize bot components"""
         load_dotenv()
@@ -75,6 +102,7 @@ class FAPBot(commands.Bot):
             user_agent=os.getenv('USER_AGENT'),
             data_dir='data'
         )
+        self.auth.set_event_callback(self._handle_auth_event)
 
         # Validate the FAP session at startup so the bot can auto-login or
         # refresh immediately when cookies are missing or expired.

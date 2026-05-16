@@ -7,7 +7,7 @@ Session refresh is handled by SessionValidator via Camoufox.
 import os
 import logging
 import asyncio
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 from datetime import datetime
 from pathlib import Path
 from .auto_login_feid import FAPAutoLogin
@@ -47,6 +47,7 @@ class FAPAuth:
         self._auth: Optional[FAPAutoLogin] = None
         self._validator: Optional[SessionValidator] = None
         self._refreshing = False
+        self._event_callback: Optional[Callable[[dict], Awaitable[None]]] = None
         self._last_diagnostic = {
             "timestamp": None,
             "operation": "startup",
@@ -66,6 +67,35 @@ class FAPAuth:
         }
         log_method = logger.error if status == "error" else logger.warning if status == "warning" else logger.info
         log_method(f"[{operation}] {code}: {detail}")
+
+    def set_event_callback(self, callback: Callable[[dict], Awaitable[None]]):
+        """Register async callback for auth lifecycle events."""
+        self._event_callback = callback
+
+    async def _emit_event(self, event_type: str, status: str, detail: str, **extra):
+        """Send auth event to callback when configured."""
+        if not self._event_callback:
+            return
+
+        payload = {
+            "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
+            "event_type": event_type,
+            "status": status,
+            "detail": detail,
+            **extra,
+        }
+        try:
+            await self._event_callback(payload)
+        except Exception as exc:
+            logger.error(f"Auth event callback failed: {exc}")
+
+    def _browser_ready(self) -> bool:
+        """Whether the shared browser instance is still available for fetches."""
+        return bool(
+            self._auth is not None
+            and getattr(self._auth, "_context", None) is not None
+            and getattr(self._auth, "_page", None) is not None
+        )
 
     def get_diagnostic_snapshot(self) -> dict:
         """Return the latest auth state for status reporting."""
@@ -144,7 +174,7 @@ class FAPAuth:
             )
             if self.auto_refresh and self.username and self.password:
                 logger.info("Auto-refresh enabled - attempting login...")
-                if await self._refresh_session_once():
+                if await self._refresh_session_once(reason="missing_cookies"):
                     self._record_diagnostic(
                         operation="session",
                         status="ok",
@@ -171,7 +201,7 @@ class FAPAuth:
                     code="session_invalid",
                     detail="Existing cookies failed the session health check.",
                 )
-                if not await self._refresh_session_once():
+                if not await self._refresh_session_once(reason="session_invalid"):
                     logger.warning("Session validation failed")
                     return None
                 self._record_diagnostic(
@@ -190,7 +220,7 @@ class FAPAuth:
 
         return self
 
-    async def _refresh_session_once(self) -> bool:
+    async def _refresh_session_once(self, reason: str = "unknown") -> bool:
         """
         Refresh session once (with lock to prevent concurrent refresh)
         """
@@ -224,6 +254,14 @@ class FAPAuth:
                     code="refresh_ok",
                     detail="Session refreshed successfully.",
                 )
+                await self._emit_event(
+                    event_type="login_result",
+                    status="success",
+                    detail="FAP login/refresh succeeded.",
+                    reason=reason,
+                    operation="refresh",
+                    code="refresh_ok",
+                )
             else:
                 self._record_diagnostic(
                     operation="refresh",
@@ -231,104 +269,100 @@ class FAPAuth:
                     code="refresh_failed",
                     detail="Session refresh failed via Camoufox.",
                 )
+                await self._emit_event(
+                    event_type="login_result",
+                    status="error",
+                    detail="FAP login/refresh failed.",
+                    reason=reason,
+                    operation="refresh",
+                    code="refresh_failed",
+                )
 
             return success
         finally:
             self._refreshing = False
 
-    async def fetch_schedule(self, week: Optional[int] = None, year: Optional[int] = None) -> Optional[str]:
-        """Fetch schedule HTML (aiohttp, non-blocking)"""
+    async def _fetch_with_recovery(
+        self,
+        operation: str,
+        fetcher: Callable[[], Awaitable[Optional[str]]],
+    ) -> Optional[str]:
+        """Fetch once, then validate session and re-login once if needed."""
         await self._ensure_auth()
 
-        html = await self._auth.fetch_schedule(week=week, year=year)
-
-        if not html and self.auto_refresh:
+        html = await fetcher()
+        if html:
             self._record_diagnostic(
-                operation="schedule",
-                status="warning",
-                code="page_unavailable",
-                detail="Initial schedule fetch returned no usable HTML.",
-            )
-            if await self._refresh_session_once():
-                logger.info("Session refreshed - retrying fetch...")
-                html = await self._auth.fetch_schedule(week=week, year=year)
-                if html:
-                    self._record_diagnostic(
-                        operation="schedule",
-                        status="ok",
-                        code="refresh_recovered",
-                        detail="Schedule fetch succeeded after session refresh.",
-                    )
-                else:
-                    self._record_diagnostic(
-                        operation="schedule",
-                        status="error",
-                        code="refresh_retry_failed",
-                        detail="Schedule fetch still failed after session refresh.",
-                    )
-            else:
-                self._record_diagnostic(
-                    operation="schedule",
-                    status="error",
-                    code="refresh_failed",
-                    detail="Schedule fetch failed and session refresh did not recover it.",
-                )
-        elif html:
-            self._record_diagnostic(
-                operation="schedule",
+                operation=operation,
                 status="ok",
                 code="fetch_ok",
-                detail="Schedule fetch succeeded.",
+                detail=f"{operation.capitalize()} fetch succeeded.",
             )
+            return html
 
-        return html
+        if not self.auto_refresh:
+            self._record_diagnostic(
+                operation=operation,
+                status="error",
+                code="page_unavailable",
+                detail=f"{operation.capitalize()} fetch returned no usable HTML and auto-refresh is disabled.",
+            )
+            return None
+
+        self._record_diagnostic(
+            operation=operation,
+            status="warning",
+            code="page_unavailable",
+            detail=f"Initial {operation} fetch returned no usable HTML.",
+        )
+
+        if not self._browser_ready():
+            logger.warning(f"{operation} fetch failed because browser context is unavailable; forcing re-login.")
+            recovered = await self._refresh_session_once(reason=f"{operation}_browser_unavailable")
+        else:
+            session = await self.get_session(force_refresh=False, fast_check=False)
+            recovered = bool(session)
+
+        if not recovered:
+            self._record_diagnostic(
+                operation=operation,
+                status="error",
+                code="refresh_failed",
+                detail=f"{operation.capitalize()} fetch failed because session recovery did not succeed.",
+            )
+            return None
+
+        html = await fetcher()
+        if html:
+            self._record_diagnostic(
+                operation=operation,
+                status="ok",
+                code="refresh_recovered",
+                detail=f"{operation.capitalize()} fetch succeeded after session recovery.",
+            )
+            return html
+
+        self._record_diagnostic(
+            operation=operation,
+            status="error",
+            code="refresh_retry_failed",
+            detail=f"{operation.capitalize()} fetch still failed after session recovery.",
+        )
+        return None
+
+    async def fetch_schedule(self, week: Optional[int] = None, year: Optional[int] = None) -> Optional[str]:
+        """Fetch schedule HTML (aiohttp, non-blocking)"""
+        return await self._fetch_with_recovery(
+            "schedule",
+            lambda: self._auth.fetch_schedule(week=week, year=year),
+        )
 
     async def fetch_exam_schedule(self) -> Optional[str]:
         """Fetch exam schedule HTML (aiohttp, non-blocking)"""
-        await self._ensure_auth()
-
-        html = await self._auth.fetch_exam_schedule()
-
-        if not html and self.auto_refresh:
-            self._record_diagnostic(
-                operation="exam schedule",
-                status="warning",
-                code="page_unavailable",
-                detail="Initial exam schedule fetch returned no usable HTML.",
-            )
-            if await self._refresh_session_once():
-                logger.info("Session refreshed - retrying fetch...")
-                html = await self._auth.fetch_exam_schedule()
-                if html:
-                    self._record_diagnostic(
-                        operation="exam schedule",
-                        status="ok",
-                        code="refresh_recovered",
-                        detail="Exam schedule fetch succeeded after session refresh.",
-                    )
-                else:
-                    self._record_diagnostic(
-                        operation="exam schedule",
-                        status="error",
-                        code="refresh_retry_failed",
-                        detail="Exam schedule fetch still failed after session refresh.",
-                    )
-            else:
-                self._record_diagnostic(
-                    operation="exam schedule",
-                    status="error",
-                    code="refresh_failed",
-                    detail="Exam schedule fetch failed and session refresh did not recover it.",
-                )
-        elif html:
-            self._record_diagnostic(
-                operation="exam schedule",
-                status="ok",
-                code="fetch_ok",
-                detail="Exam schedule fetch succeeded.",
-            )
-
-        return html
+        return await self._fetch_with_recovery(
+            "exam schedule",
+            lambda: self._auth.fetch_exam_schedule(),
+        )
 
     async def fetch_attendance(
         self,
@@ -338,60 +372,15 @@ class FAPAuth:
         course: int = None
     ) -> Optional[str]:
         """Fetch attendance HTML (aiohttp, non-blocking)"""
-        await self._ensure_auth()
-
-        html = await self._auth.fetch_attendance(
-            student_id=student_id,
-            campus=campus,
-            term=term,
-            course=course
+        return await self._fetch_with_recovery(
+            "attendance",
+            lambda: self._auth.fetch_attendance(
+                student_id=student_id,
+                campus=campus,
+                term=term,
+                course=course,
+            ),
         )
-
-        if not html and self.auto_refresh:
-            self._record_diagnostic(
-                operation="attendance",
-                status="warning",
-                code="page_unavailable",
-                detail="Initial attendance fetch returned no usable HTML.",
-            )
-            if await self._refresh_session_once():
-                logger.info("Session refreshed - retrying fetch...")
-                html = await self._auth.fetch_attendance(
-                    student_id=student_id,
-                    campus=campus,
-                    term=term,
-                    course=course
-                )
-                if html:
-                    self._record_diagnostic(
-                        operation="attendance",
-                        status="ok",
-                        code="refresh_recovered",
-                        detail="Attendance fetch succeeded after session refresh.",
-                    )
-                else:
-                    self._record_diagnostic(
-                        operation="attendance",
-                        status="error",
-                        code="refresh_retry_failed",
-                        detail="Attendance fetch still failed after session refresh.",
-                    )
-            else:
-                self._record_diagnostic(
-                    operation="attendance",
-                    status="error",
-                    code="refresh_failed",
-                    detail="Attendance fetch failed and session refresh did not recover it.",
-                )
-        elif html:
-            self._record_diagnostic(
-                operation="attendance",
-                status="ok",
-                code="fetch_ok",
-                detail="Attendance fetch succeeded.",
-            )
-
-        return html
 
     async def fetch_grades(
         self,
@@ -400,106 +389,23 @@ class FAPAuth:
         course: int = None
     ) -> Optional[str]:
         """Fetch grade HTML (aiohttp, non-blocking)"""
-        await self._ensure_auth()
-
-        html = await self._auth.fetch_grades(
-            student_id=student_id,
-            term=term,
-            course=course
+        return await self._fetch_with_recovery(
+            "grades",
+            lambda: self._auth.fetch_grades(
+                student_id=student_id,
+                term=term,
+                course=course,
+            ),
         )
-
-        if not html and self.auto_refresh:
-            self._record_diagnostic(
-                operation="grades",
-                status="warning",
-                code="page_unavailable",
-                detail="Initial grade fetch returned no usable HTML.",
-            )
-            if await self._refresh_session_once():
-                logger.info("Session refreshed - retrying fetch...")
-                html = await self._auth.fetch_grades(
-                    student_id=student_id,
-                    term=term,
-                    course=course
-                )
-                if html:
-                    self._record_diagnostic(
-                        operation="grades",
-                        status="ok",
-                        code="refresh_recovered",
-                        detail="Grade fetch succeeded after session refresh.",
-                    )
-                else:
-                    self._record_diagnostic(
-                        operation="grades",
-                        status="error",
-                        code="refresh_retry_failed",
-                        detail="Grade fetch still failed after session refresh.",
-                    )
-            else:
-                self._record_diagnostic(
-                    operation="grades",
-                    status="error",
-                    code="refresh_failed",
-                    detail="Grade fetch failed and session refresh did not recover it.",
-                )
-        elif html:
-            self._record_diagnostic(
-                operation="grades",
-                status="ok",
-                code="fetch_ok",
-                detail="Grade fetch succeeded.",
-            )
-
-        return html
 
     async def fetch_application(self) -> Optional[str]:
         """Fetch application HTML (aiohttp, non-blocking)"""
-        await self._ensure_auth()
-
         try:
-            html = await self._auth.fetch_application()
-
-            if not html and self.auto_refresh:
-                self._record_diagnostic(
-                    operation="application",
-                    status="warning",
-                    code="page_unavailable",
-                    detail="Initial application fetch returned no usable HTML.",
-                )
-                if await self._refresh_session_once():
-                    logger.info("Session refreshed - retrying fetch...")
-                    html = await self._auth.fetch_application()
-                    if html:
-                        self._record_diagnostic(
-                            operation="application",
-                            status="ok",
-                            code="refresh_recovered",
-                            detail="Application fetch succeeded after session refresh.",
-                        )
-                    else:
-                        self._record_diagnostic(
-                            operation="application",
-                            status="error",
-                            code="refresh_retry_failed",
-                            detail="Application fetch still failed after session refresh.",
-                        )
-                else:
-                    self._record_diagnostic(
-                        operation="application",
-                        status="error",
-                        code="refresh_failed",
-                        detail="Application fetch failed and session refresh did not recover it.",
-                    )
-            elif html:
-                self._record_diagnostic(
-                    operation="application",
-                    status="ok",
-                    code="fetch_ok",
-                    detail="Application fetch succeeded.",
-                )
-
-            return html
+            await self._ensure_auth()
+            return await self._fetch_with_recovery(
+                "application",
+                lambda: self._auth.fetch_application(),
+            )
         except AttributeError:
             self._record_diagnostic(
                 operation="application",

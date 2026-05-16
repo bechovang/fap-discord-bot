@@ -100,6 +100,15 @@ class FAPScheduler:
         self._today_schedule: list = []
         self._schedule_fetch_date: str = ""
 
+    async def _send_scheduler_report(self, title: str, description: str, color: discord.Color):
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=color,
+            timestamp=discord.utils.utcnow(),
+        )
+        await send_to_all_guilds(self.bot, embed)
+
     def start(self):
         # Attendance check every 15 minutes during day
         self.scheduler.add_job(
@@ -165,24 +174,45 @@ class FAPScheduler:
 
             current_slot = _get_current_slot()
             if not current_slot:
+                await self._send_scheduler_report(
+                    "ℹ️ Attendance Check",
+                    "No active class slot right now. Attendance check completed with no changes.",
+                    discord.Color.blurple(),
+                )
                 return
 
             schedule = await self._get_today_schedule()
             if not schedule:
+                await self._send_scheduler_report(
+                    "⚠️ Attendance Check",
+                    "Could not load today's schedule, or there are no classes today.",
+                    discord.Color.orange(),
+                )
                 return
 
             # Filter schedule items for current slot
             current_classes = [s for s in schedule if s.slot == current_slot]
             if not current_classes:
+                await self._send_scheduler_report(
+                    "ℹ️ Attendance Check",
+                    f"Checked slot {current_slot}. No class is scheduled in this slot.",
+                    discord.Color.blurple(),
+                )
                 return
 
             student_id = os.getenv("FAP_STUDENT_ID", "")
             campus = int(os.getenv("FAP_CAMPUS", "4"))
             if not student_id:
                 logger.warning("FAP_STUDENT_ID not set, skipping attendance check")
+                await self._send_scheduler_report(
+                    "⚠️ Attendance Check",
+                    "Skipped attendance check because `FAP_STUDENT_ID` is not configured.",
+                    discord.Color.orange(),
+                )
                 return
 
             mins_remaining = _minutes_until_slot_end(current_slot)
+            any_update = False
 
             for cls in current_classes:
                 notify_key = f"{today_str}_{current_slot}_{cls.subject_code}"
@@ -223,6 +253,7 @@ class FAPScheduler:
 
                     await send_to_all_guilds(self.bot, embed)
                     self._notified_slots[notify_key] = status
+                    any_update = True
                     logger.info(f"Attendance notified: {cls.subject_code} slot {current_slot} = {status}")
 
                 # Case 2: 15 minutes before class ends, still not marked
@@ -242,10 +273,24 @@ class FAPScheduler:
                         await send_to_all_guilds(self.bot, embed)
                         self._notified_slots[notify_key] = "warning"
                         self._notified_slots[warning_key] = "warned"
+                        any_update = True
                         logger.info(f"Attendance warning: {cls.subject_code} slot {current_slot}, {mins_remaining} min left")
+
+            if not any_update:
+                subjects = ", ".join(cls.subject_code for cls in current_classes)
+                await self._send_scheduler_report(
+                    "ℹ️ Attendance Check",
+                    f"Checked slot {current_slot} for {subjects}. No attendance change was detected.",
+                    discord.Color.blurple(),
+                )
 
         except Exception as e:
             logger.error(f"Attendance check failed: {e}")
+            await self._send_scheduler_report(
+                "❌ Attendance Check Failed",
+                f"Attendance check crashed: `{e}`",
+                discord.Color.red(),
+            )
 
     async def _weekly_check(self):
         try:
@@ -373,9 +418,19 @@ class FAPScheduler:
                 logger.info(f"Weekly check: {len(changes)} changes notified")
             else:
                 logger.info("Weekly check: no changes detected")
+                await self._send_scheduler_report(
+                    "ℹ️ Daily Check",
+                    "Daily check completed. No schedule, grade, or exam changes were detected.",
+                    discord.Color.blurple(),
+                )
 
         except Exception as e:
             logger.error(f"Weekly check failed: {e}")
+            await self._send_scheduler_report(
+                "❌ Daily Check Failed",
+                f"Daily check crashed: `{e}`",
+                discord.Color.red(),
+            )
 
     async def _session_keepalive(self):
         try:
@@ -386,3 +441,8 @@ class FAPScheduler:
                 logger.warning("Session keepalive: session expired, will auto-refresh on next use")
         except Exception as e:
             logger.error(f"Session keepalive failed: {e}")
+            await self._send_scheduler_report(
+                "❌ Session Keepalive Failed",
+                f"Session keepalive crashed: `{e}`",
+                discord.Color.red(),
+            )
