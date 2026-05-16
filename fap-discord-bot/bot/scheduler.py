@@ -252,20 +252,24 @@ class FAPScheduler:
             )
 
     async def _daily_check(self):
-        try:
-            logger.info("Starting daily check...")
+        logger.info("Starting daily check...")
 
-            snapshot_file = SNAPSHOT_DIR / "weekly_snapshot.json"
-            prev_data = {}
-            if snapshot_file.exists():
+        snapshot_file = SNAPSHOT_DIR / "weekly_snapshot.json"
+        prev_data = {}
+        if snapshot_file.exists():
+            try:
                 with open(snapshot_file, "r", encoding="utf-8") as file:
                     prev_data = json.load(file)
+            except (json.JSONDecodeError, IOError):
+                logger.warning("Failed to load previous snapshot, starting fresh")
 
-            new_data = {}
-            changes = []
+        new_data = {}
+        changes = []
+        errors = []
 
-            student_id = os.getenv("FAP_STUDENT_ID", "")
-
+        # --- Grades ---
+        student_id = os.getenv("FAP_STUDENT_ID", "")
+        try:
             if student_id:
                 html = await self.auth.fetch_grades(student_id=student_id)
                 if html:
@@ -299,7 +303,12 @@ class FAPScheduler:
                                     )
                                 elif prev["status"] != grade["status"] and grade["status"]:
                                     changes.append(f"📋 Status changed: **{grade['code']}** -> {grade['status']}")
+        except Exception as exc:
+            logger.error(f"Daily check grades failed: {exc}")
+            errors.append(f"Grades: {exc}")
 
+        # --- Schedule ---
+        try:
             html = await self.auth.fetch_schedule()
             if html:
                 items = self.schedule_parser.parse_schedule(html)
@@ -324,7 +333,12 @@ class FAPScheduler:
                     key = f"{item['code']}_{item['day']}_{item['slot']}"
                     if key not in prev_sched_map:
                         changes.append(f"📅 New class: **{item['code']}** on {item['day']} Slot {item['slot']} at {item['room']}")
+        except Exception as exc:
+            logger.error(f"Daily check schedule failed: {exc}")
+            errors.append(f"Schedule: {exc}")
 
+        # --- Exams ---
+        try:
             html = await self.auth.fetch_exam_schedule()
             if html:
                 exams = self.exam_parser.parse_exam_schedule(html)
@@ -353,38 +367,46 @@ class FAPScheduler:
                                 changes.append(
                                     f"Exam changed: **{exam['subject']}** {field}: {exam[field]} (was {prev_exams[key].get(field, 'N/A')})"
                                 )
+        except Exception as exc:
+            logger.error(f"Daily check exams failed: {exc}")
+            errors.append(f"Exams: {exc}")
 
+        # --- Save snapshot ---
+        try:
             with open(snapshot_file, "w", encoding="utf-8") as file:
                 json.dump(new_data, file, indent=2, ensure_ascii=False)
-
-            if changes:
-                embed = discord.Embed(
-                    title="📋 Daily Update",
-                    description=f"Found **{len(changes)}** change(s):",
-                    color=discord.Color.gold(),
-                    timestamp=discord.utils.utcnow(),
-                )
-                change_text = "\n".join(changes[:20])
-                if len(change_text) > 1024:
-                    change_text = change_text[:1020] + "..."
-                embed.add_field(name="Changes", value=change_text, inline=False)
-
-                await send_to_all_guilds(self.bot, embed)
-                logger.info(f"Daily check: {len(changes)} changes notified")
-            else:
-                logger.info("Daily check: no changes detected")
-                await self._send_scheduler_report(
-                    "ℹ️ Daily Check",
-                    "Daily check completed. No schedule, grade, or exam changes were detected.",
-                    discord.Color.blurple(),
-                )
-
         except Exception as exc:
-            logger.error(f"Daily check failed: {exc}")
+            logger.error(f"Daily check snapshot save failed: {exc}")
+            errors.append(f"Snapshot save: {exc}")
+
+        # --- Report ---
+        if changes:
+            embed = discord.Embed(
+                title="📋 Daily Update",
+                description=f"Found **{len(changes)}** change(s):",
+                color=discord.Color.gold(),
+                timestamp=discord.utils.utcnow(),
+            )
+            change_text = "\n".join(changes[:20])
+            if len(change_text) > 1024:
+                change_text = change_text[:1020] + "..."
+            embed.add_field(name="Changes", value=change_text, inline=False)
+            if errors:
+                embed.add_field(name="Errors", value="\n".join(errors[:5]), inline=False)
+            await send_to_all_guilds(self.bot, embed)
+            logger.info(f"Daily check: {len(changes)} changes notified")
+        elif errors:
             await self._send_scheduler_report(
-                "❌ Daily Check Failed",
-                f"Daily check crashed: `{exc}`",
-                discord.Color.red(),
+                "⚠️ Daily Check Partial Failure",
+                "Daily check completed with errors:\n" + "\n".join(errors[:5]),
+                discord.Color.orange(),
+            )
+        else:
+            logger.info("Daily check: no changes detected")
+            await self._send_scheduler_report(
+                "ℹ️ Daily Check",
+                "Daily check completed. No schedule, grade, or exam changes were detected.",
+                discord.Color.blurple(),
             )
 
     async def _session_keepalive(self):
