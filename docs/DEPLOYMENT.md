@@ -401,6 +401,8 @@ How it works:
 - This override takes precedence over `PROXY_URL` from `.env`
 - Provider labels like `HTTPS` should still be entered as `http://user:pass@host:port` internally
 - The command response shows whether an immediate refresh/login attempt succeeded
+- Attendance checks only run inside real class windows derived from the weekly schedule, and each class remains eligible through 30 minutes after class end
+- The bot runs an initial daily check shortly after startup so schedule and snapshot caches are warm before the first normal cycle
 
 ### Changing Proxy on Production
 

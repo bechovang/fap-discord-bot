@@ -455,6 +455,8 @@ MIT
 
 The current production behavior differs from some older sections above:
 
+- Attendance check now uses the actual weekly schedule as the source of truth and only checks from class start until 30 minutes after class end.
+- The bot runs a daily check shortly after startup to warm caches and snapshot files.
 - Session keepalive now runs every 15 minutes.
 - Command fetch failures now go through centralized session recovery and can force re-login when the browser context is gone.
 - Login and refresh attempts send Discord notifications for both success and failure.

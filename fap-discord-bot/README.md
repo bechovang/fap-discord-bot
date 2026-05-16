@@ -103,8 +103,10 @@ data/                Runtime data (cookies, snapshots, DB)
 
 ## Scheduler Behavior
 
-- Attendance check runs every 15 minutes.
+- Attendance check runs every 15 minutes, but only inside real class windows from the weekly schedule.
+- Each class is checked from class start until 30 minutes after class end.
 - Daily check runs every day and sends either detected changes or a "no changes" summary.
+- The bot runs one daily check shortly after startup to warm the schedule cache and snapshot files.
 - Session keepalive runs every 15 minutes and performs a real session validation so transient proxy recovery can trigger automatic re-login quickly.
 - Login/refresh attempts also produce Discord notifications.
 
