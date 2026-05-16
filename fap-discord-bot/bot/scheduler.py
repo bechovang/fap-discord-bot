@@ -128,17 +128,18 @@ class FAPScheduler:
             replace_existing=True,
         )
 
-        # Session keepalive every 4 hours
+        # Session keepalive every 15 minutes so transient proxy recovery
+        # can trigger a re-login quickly without waiting for user commands.
         self.scheduler.add_job(
             self._session_keepalive,
-            IntervalTrigger(hours=4, jitter=300),
+            IntervalTrigger(minutes=15, jitter=60),
             id="session_keepalive",
             name="Session Keepalive",
             replace_existing=True,
         )
 
         self.scheduler.start()
-        logger.info("Scheduler started with 3 jobs: attendance(15m), weekly(sun 22:00), keepalive(4h)")
+        logger.info("Scheduler started with 3 jobs: attendance(15m), weekly(sun 22:00), keepalive(15m)")
 
     def stop(self):
         if self.scheduler.running:
@@ -434,11 +435,11 @@ class FAPScheduler:
 
     async def _session_keepalive(self):
         try:
-            session = await self.auth.get_session(force_refresh=False, fast_check=True)
+            session = await self.auth.get_session(force_refresh=False, fast_check=False)
             if session:
                 logger.debug("Session keepalive: session is valid")
             else:
-                logger.warning("Session keepalive: session expired, will auto-refresh on next use")
+                logger.warning("Session keepalive: session check failed and refresh did not recover it")
         except Exception as e:
             logger.error(f"Session keepalive failed: {e}")
             await self._send_scheduler_report(
