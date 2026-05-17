@@ -2,7 +2,7 @@
 ## FAP Discord Bot - DigitalOcean Deployment
 
 **Version:** 2.0
-**Date:** 2026-05-14
+**Date:** 2026-05-17
 **Target Platform:** DigitalOcean VPS (GitHub Education)
 **Document Status:** Updated
 
@@ -45,6 +45,7 @@
 |  |  |  - SQLite Database                                | |  |
 |  |  |  - Background Scheduler                           | |  |
 |  |  |  - HTML Parsers (BeautifulSoup)                   | |  |
+|  |  |  - HTML Dashboard (Chart.js, aiohttp)             | |  |
 |  |  +--------------------------------------------------+ |  |
 |  |                                                         |  |
 |  |  Volumes:                                               |  |
@@ -310,12 +311,31 @@ services:
       - DEFAULT_CHANNEL_ID=${DEFAULT_CHANNEL_ID}
       - HEADLESS=false
       - PROXY_URL=${PROXY_URL:-}
+      - DASHBOARD_URL=${DASHBOARD_URL:-}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    ports:
+      - "8080:8080"
 ```
 
 **Note:** `HEADLESS=false` in docker-compose.yml is the default. The actual headless mode is controlled by the `HEADLESS` env var in `.env` file. When `HEADLESS=true`, Camoufox uses its built-in virtual display (`headless="virtual"` mode).
+
+### HTML Dashboard
+
+The bot auto-renders an HTML dashboard after every daily check and serves it at port 8080. The dashboard includes:
+
+- Summary cards (student info, last updated)
+- Today's schedule with room/time details
+- Weekly schedule grid
+- Grades table with GPA bar chart (Chart.js)
+- Attendance summary with doughnut chart
+- Exams table
+
+To configure the dashboard URL in Discord notifications:
+```env
+DASHBOARD_URL=http://YOUR_SERVER_IP:8080/
+```
 
 ---
 
@@ -338,6 +358,13 @@ services:
 | `PROXY_URL` | (empty) | Residential proxy URL. **Required** on datacenter IPs |
 | `FAP_CAMPUS` | `4` | Campus ID for FAP |
 | `FAP_STUDENT_ID` | (empty) | Student ID for grade/attendance commands |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DASHBOARD_URL` | (empty) | Public URL for HTML dashboard, shown in Discord daily check notifications |
+| `WEB_PORT` | `8080` | Dashboard web server port |
 
 ### .env File Rules
 

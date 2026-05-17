@@ -2,6 +2,84 @@
 
 All notable changes to the FAP Discord Bot project.
 
+## [2026-05-17] - HTML Dashboard, Parser Fixes, Login Reliability
+
+### Added
+
+#### HTML Dashboard
+- **`bot/web_server.py`** - Lightweight aiohttp web server
+  - Serves `data/daily_report.html` at `/` endpoint on port 8080
+  - Runs on same asyncio event loop as discord.py (no extra process)
+  - Port configurable via `WEB_PORT` env var (default 8080)
+  - Returns "Report not ready yet" message if file doesn't exist
+
+- **`bot/html_report.py`** - Full HTML dashboard renderer
+  - `render_daily_report(data: dict) -> str` returns complete HTML page
+  - Dark theme, responsive, CSS inline (no external dependencies except Chart.js CDN)
+  - Chart.js bar chart for grade distribution, doughnut chart for attendance
+  - Sections: summary cards, today's schedule, weekly grid, grades table + GPA chart, attendance summary + detail, exams table
+  - Auto-updated every time daily check runs
+
+- **`docker-compose.yml`** - Exposed port 8080 and added `DASHBOARD_URL` env var
+  ```yaml
+  ports:
+    - "8080:8080"
+  environment:
+    - DASHBOARD_URL=${DASHBOARD_URL:-}
+  ```
+
+- Dashboard URL included in Discord daily check notification messages
+
+#### New Slash Command
+- **`/daily`** - Manually trigger daily check and update dashboard
+  - Shows ephemeral "Running daily check..." message, then edits with result + dashboard URL
+  - Added to `bot/commands/status.py`
+
+### Fixed
+
+#### Grade & Attendance Parser in Scheduler
+- **`bot/scheduler.py`** - Fixed grade and attendance parsing in daily check
+  - **Root cause:** Scheduler fetched only the term overview page which has no grade/attendance table. The FAP grade page shows course links but the actual grade data requires navigating to each individual course page.
+  - **Fix:** Changed `_daily_check()` to follow the same course-iteration pattern as `/grade this-term` and `/attendance this-term` commands:
+    1. Fetch base page → extract course list
+    2. For each course, fetch individual course page with `course=course_id`
+    3. Parse grade/attendance data from each course page
+  - Grade parser now successfully extracts: CSD201 (8.0), DBI202 (6.6), JPD113 (7.8), LAB211 (0.0), MAS291 (8.4), SWE202 (6.7)
+  - Attendance parser now iterates courses individually (4 fetches for 6 courses)
+
+#### FeID Login Reliability
+- **`scraper/auto_login_feid.py`** - Multiple login flow improvements
+  - Refactored `_trigger_feid_login()` into 3 methods with retry loop:
+    - `_click_feid_button()` - Click FeID button with `wait_for(state="visible", timeout=10000)` before checking button count
+    - `_wait_for_feid_redirect(timeout=15.0)` - Poll-based redirect detection (replaces blind 3s sleep)
+    - `_trigger_feid_login()` - 3-retry loop wrapping click + redirect
+  - FeID redirect timeout increased from 3s blind sleep to 15s poll loop
+  - FeID button now waits for visibility before interaction (fixes startup timing issue)
+
+#### Cloudflare Title Detection (Multilingual)
+- **`scraper/auto_login_feid.py`** - Expanded Cloudflare challenge detection
+  - Added multilingual CF keywords: Vietnamese (chờ, vui lòng chờ), Japanese (稍候), Korean (잠시), French (un instant), German (einen moment), Italian (attendi), Portuguese (aguarde)
+  - Increased non-CF title acceptance thresholds:
+    - `i > 15` with `fap`/`fpt` title check (was `i > 5`)
+    - `i > 30` hard fallback (was implicit at `i > 5`)
+  - Added FAP content detection: checks for `btnloginFeId`, `drpSelectWeek`, `ddlCampus` in page body
+
+### Changed
+
+- `bot/bot.py` - Start web server in `setup_hook()` after auth setup
+- `bot/scheduler.py` - Daily check now renders HTML dashboard after snapshot save
+- `bot/commands/status.py` - Added `/daily` command
+- `docker-compose.yml` - Added port 8080 exposure and `DASHBOARD_URL` env var
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WEB_PORT` | `8080` | Dashboard web server port |
+| `DASHBOARD_URL` | (empty) | Public URL shown in Discord notifications (e.g., `http://68.183.233.253:8080/`) |
+
+---
+
 ## [2026-03-11] - Grade Feature Improvements
 
 ### Fixed

@@ -13,8 +13,9 @@ Bot xác thực với FAP (FPT Academic Portal) thông qua FeID OAuth, vượt C
 - **Điểm số** — Xem điểm theo kỳ, tính GPA tích lũy
 - **Điểm danh** — Theo dõi điểm danh theo môn và kỳ
 - **Tự động làm mới** — Phiên tự động refresh khi hết hạn
-- **Background jobs** — Giám sát điểm danh (15 phút), báo cáo thay đổi hàng tuần (CN 22:00), giữ phiên (4 giờ)
+- **Background jobs** — Giám sát điểm danh (15 phút), báo cáo thay đổi hàng ngày (22:07), giữ phiên (15 phút)
 - **Vượt Cloudflare** — Camoufox với click Turnstile checkbox + Firefox profile cố định
+- **HTML Dashboard** — Báo cáo trực quan với Chart.js, serve từ droplet tại `http://68.183.233.253:8080/`
 
 ---
 
@@ -31,6 +32,7 @@ Bot xác thực với FAP (FPT Academic Portal) thông qua FeID OAuth, vượt C
 | `/grade gpa` | Tính GPA tích lũy |
 | `/attendance view` | Xem điểm danh tương tác |
 | `/attendance this-term` | Điểm danh kỳ hiện tại |
+| `/daily` | Chạy daily check và cập nhật dashboard |
 | `/status` | Trạng thái bot và phiên |
 | `/ping` | Kiểm tra kết nối |
 | `/config channel` | Cài đặt kênh thông báo |
@@ -48,6 +50,10 @@ Discord Slash Command
   -> FAP portal HTML
   -> scraper/*_parser.py        (Các HTML parser)
   -> Discord response
+
+Browser -> http://68.183.233.253:8080/
+  -> bot/web_server.py          (aiohttp web server)
+  -> data/daily_report.html     (HTML dashboard + Chart.js)
 ```
 
 ### Các thành phần chính
@@ -56,7 +62,9 @@ Discord Slash Command
 |---|---|
 | `bot/bot.py` | Discord client, load lệnh, khởi động scheduler |
 | `bot/commands/` | Triển khai các slash command |
-| `bot/scheduler.py` | Background jobs (điểm danh, báo cáo tuần, keepalive) |
+| `bot/scheduler.py` | Background jobs (điểm danh, daily check, keepalive) |
+| `bot/web_server.py` | aiohttp web server cho HTML dashboard |
+| `bot/html_report.py` | HTML dashboard renderer (Chart.js, dark theme) |
 | `scraper/auth.py` | `FAPAuth` adapter — bao bọc fetch + auto-refresh với retry |
 | `scraper/auto_login_feid.py` | `FAPAutoLogin` — Tự động hóa Camoufox cho login và fetch |
 | `scraper/session_validator.py` | `SessionValidator` — Kiểm tra sức khỏe phiên và refresh |
@@ -142,6 +150,7 @@ PROXY_URL=http://user:pass@host:port      # Residential proxy (cần cho datacen
 FAP_STUDENT_ID=SE123456                   # Cần cho lệnh grade/attendance
 SCHEDULER_TIMEZONE=Asia/Ho_Chi_Minh       # Múi giờ scheduler
 DEFAULT_CHANNEL_ID=123456789              # Kênh thông báo mặc định
+DASHBOARD_URL=http://68.183.233.253:8080/ # URL dashboard cho Discord notification
 LOG_LEVEL=INFO
 ```
 
@@ -174,6 +183,8 @@ fap-discord-bot/
 ├── bot/
 │   ├── bot.py                  # Discord client + startup
 │   ├── scheduler.py            # Background jobs
+│   ├── web_server.py           # aiohttp dashboard server
+│   ├── html_report.py          # HTML dashboard renderer (Chart.js)
 │   ├── notifier.py             # Discord notification helper
 │   ├── progress.py             # Progress tracking
 │   └── commands/
@@ -181,7 +192,7 @@ fap-discord-bot/
 │       ├── exam.py             # /exam schedule, /exam upcoming
 │       ├── grade.py            # /grade view, /grade this-term, /grade gpa
 │       ├── attendance.py       # /attendance view, /attendance this-term
-│       ├── status.py           # /status, /ping
+│       ├── status.py           # /status, /ping, /daily
 │       └── config.py           # /config channel, /config status
 │
 ├── scraper/
@@ -195,7 +206,7 @@ fap-discord-bot/
 │   ├── attendance_parser.py    # Attendance parser
 │   └── fap_scraper.py          # Legacy scraper interface
 │
-└── data/                       # Runtime data (cookies, snapshots, DB)
+└── data/                       # Runtime data (cookies, snapshots, DB, dashboard HTML)
 ```
 
 ---
@@ -207,8 +218,8 @@ Scheduler chạy 3 jobs tự động:
 | Job | Chu kỳ | Mô tả |
 |---|---|---|
 | **Attendance Check** | Mỗi 15 phút | Giám sát slot hiện tại cho thay đổi điểm danh, gửi alert Discord |
-| **Weekly Check** | Chủ nhật 22:00 | So sánh điểm/lịch/thi với tuần trước, thông báo thay đổi |
-| **Session Keepalive** | Mỗi 4 giờ | Kiểm tra phiên, trigger re-login nếu hết hạn |
+| **Daily Check** | Hàng ngày 22:07 | Fetch điểm/lịch/thi/điểm danh, render HTML dashboard, so sánh với snapshot trước |
+| **Session Keepalive** | Mỗi 15 phút | Kiểm tra phiên, trigger re-login nếu hết hạn |
 
 ---
 
@@ -462,13 +473,18 @@ The current production behavior differs from some older sections above:
 - Login and refresh attempts send Discord notifications for both success and failure.
 - Attendance and daily scheduler jobs can also send Discord notifications when no change was detected.
 - Runtime proxy override is supported through Discord slash commands and is stored in `data/runtime_config.json`.
+- **HTML Dashboard** — Auto-rendered after every daily check, served at `http://68.183.233.253:8080/` with Chart.js charts (grades bar chart, attendance doughnut chart), dark theme, responsive layout.
+- **Daily Check** now iterates through each course individually for grade and attendance data (same pattern as `/grade this-term` and `/attendance this-term` commands), instead of only parsing the term overview page.
+- **FeID Login** now has 3-retry loop with 15s poll-based redirect detection (replaces blind 3s sleep).
+- **Cloudflare detection** expanded with multilingual keywords (Vietnamese, Japanese, Korean, French, German, Italian, Portuguese).
 
 New slash commands:
 
-- `/config proxy`
-- `/config proxy-clear`
+- `/daily` — Manually trigger daily check and update dashboard
+- `/config proxy` — Set runtime proxy override
+- `/config proxy-clear` — Remove runtime proxy override
 
-Example:
+Example proxy command:
 
 ```text
 /config proxy host:42.117.104.123 port:34640 username:muaproxy6a0460879cc96 password:MJIRbFDty14IoFHX proxy_type:HTTPS
@@ -482,3 +498,4 @@ Important deployment rule:
 
 - If Python code changed, use `docker compose up -d --build --force-recreate bot`.
 - `docker compose up -d --force-recreate` alone is not enough for code changes because source code is baked into the image.
+- `docker compose restart` does NOT restart Xvfb — use `docker compose up -d --force-recreate` instead.
