@@ -248,7 +248,13 @@ class FAPAutoLogin:
     async def _click_feid_button(self):
         """Click the FeID login button. Returns True if button was found and clicked."""
         try:
+            # Wait for the FeID button to appear (page may still be rendering after CF)
             feid_button = self._page.locator("#ctl00_mainContent_btnloginFeId")
+            try:
+                await feid_button.wait_for(state="visible", timeout=10000)
+            except Exception:
+                pass  # Fall through to check count and alternatives
+
             if await feid_button.count() > 0:
                 await feid_button.click()
                 return True

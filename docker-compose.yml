@@ -16,6 +16,7 @@ services:
       - DEFAULT_CHANNEL_ID=${DEFAULT_CHANNEL_ID}
       - HEADLESS=false
       - PROXY_URL=${PROXY_URL:-}
+      - DASHBOARD_URL=${DASHBOARD_URL:-}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

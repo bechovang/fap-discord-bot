@@ -135,6 +135,27 @@ class StatusCommands(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="daily", description="Run daily check now and update dashboard")
+    async def daily_command(self, interaction: discord.Interaction):
+        """Manually trigger the daily check."""
+        await interaction.response.send_message("Running daily check...", ephemeral=True)
+
+        scheduler = getattr(self.bot, 'scheduler', None)
+        if not scheduler:
+            await interaction.edit_original_response(content="Scheduler not available.")
+            return
+
+        try:
+            await scheduler._daily_check()
+            dashboard_url = os.getenv("DASHBOARD_URL", "")
+            msg = "Daily check completed."
+            if dashboard_url:
+                msg += f"\n📊 Dashboard: {dashboard_url}"
+            await interaction.edit_original_response(content=msg)
+        except Exception as e:
+            logger.error(f"Manual daily check failed: {e}")
+            await interaction.edit_original_response(content=f"Daily check failed: {e}")
+
 
 async def setup(bot: commands.Bot):
     """Setup function for the cog."""

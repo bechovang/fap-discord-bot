@@ -439,6 +439,9 @@ class FAPScheduler:
             logger.error(f"Daily report HTML render failed: {exc}")
 
         # --- Report ---
+        dashboard_url = os.getenv("DASHBOARD_URL", "")
+        embed = None
+
         if changes:
             embed = discord.Embed(
                 title="📋 Daily Update",
@@ -467,6 +470,14 @@ class FAPScheduler:
                 "Daily check completed. No schedule, grade, or exam changes were detected.",
                 discord.Color.blurple(),
             )
+
+        if dashboard_url:
+            dash_embed = discord.Embed(
+                description=f"📊 [Xem dashboard]({dashboard_url})",
+                color=discord.Color.blurple(),
+                timestamp=discord.utils.utcnow(),
+            )
+            await send_to_all_guilds(self.bot, dash_embed)
 
     async def _session_keepalive(self):
         try:
