@@ -276,49 +276,62 @@ class FAPScheduler:
                 html = await self.auth.fetch_grades(student_id=student_id)
                 if html:
                     terms = self.grade_parser.extract_terms(html)
-                    if terms:
-                        current_term = next((term for term in terms if term.get("is_current")), terms[-1])
-                        grade_html = await self.auth.fetch_grades(
-                            student_id=student_id,
-                            term=current_term.get("name", ""),
-                        )
-                        if grade_html:
-                            grades = self.grade_parser.parse_grades(grade_html)
-                            new_data["grades"] = [
-                                {
-                                    "code": grade.subject_code,
-                                    "name": grade.subject_name,
-                                    "credits": grade.credits,
-                                    "midterm": grade.mid_term,
-                                    "final": grade.final,
-                                    "total": grade.total,
-                                    "status": grade.status,
-                                }
-                                for grade in grades
-                            ]
+                    current_term = next((t for t in terms if t.get("is_current")), terms[-1] if terms else None)
+                    courses = self.grade_parser.extract_courses(html)
 
-                            gpa = self.grade_parser.calculate_gpa(grades)
-                            if gpa:
-                                new_data["gpa_summary"] = {
-                                    "term_gpa": round(gpa.term_gpa or 0, 2),
-                                    "cumulative_gpa": round(gpa.cumulative_gpa, 2),
-                                    "total_credits": gpa.total_credits,
-                                    "earned_credits": gpa.earned_credits,
-                                    "subjects_passed": gpa.subjects_passed,
-                                    "subjects_failed": gpa.subjects_failed,
-                                }
+                    if courses and current_term:
+                        all_grades = []
+                        for course in courses:
+                            if course.get("course_id"):
+                                course_html = await self.auth.fetch_grades(
+                                    student_id=student_id,
+                                    course=course["course_id"],
+                                )
+                                if course_html:
+                                    expected_code = course["code"] if course["code"] else None
+                                    course_grades = self.grade_parser.parse_grades(course_html, expected_subject_code=expected_code)
+                                    for g in course_grades:
+                                        if not g.subject_code:
+                                            g.subject_code = course["code"]
+                                        if not g.subject_name or g.subject_name == g.subject_code:
+                                            g.subject_name = course["name"].split("(")[0].strip()
+                                    all_grades.extend(course_grades)
 
-                            prev_grades = {grade["code"]: grade for grade in prev_data.get("grades", [])}
-                            for grade in new_data["grades"]:
-                                prev = prev_grades.get(grade["code"])
-                                if not prev:
-                                    changes.append(f"🆕 New subject: **{grade['code']}** - {grade['name']}")
-                                elif prev["total"] != grade["total"] and grade["total"]:
-                                    changes.append(
-                                        f"📝 Grade updated: **{grade['code']}** -> {grade['total']} (was {prev['total'] or 'N/A'})"
-                                    )
-                                elif prev["status"] != grade["status"] and grade["status"]:
-                                    changes.append(f"📋 Status changed: **{grade['code']}** -> {grade['status']}")
+                        new_data["grades"] = [
+                            {
+                                "code": g.subject_code,
+                                "name": g.subject_name,
+                                "credits": g.credits,
+                                "midterm": g.mid_term,
+                                "final": g.final,
+                                "total": g.total,
+                                "status": g.status,
+                            }
+                            for g in all_grades
+                        ]
+
+                        gpa = self.grade_parser.calculate_gpa(all_grades, {current_term["name"]: all_grades} if current_term else None)
+                        if gpa:
+                            new_data["gpa_summary"] = {
+                                "term_gpa": round(gpa.term_gpa or 0, 2),
+                                "cumulative_gpa": round(gpa.cumulative_gpa, 2),
+                                "total_credits": gpa.total_credits,
+                                "earned_credits": gpa.earned_credits,
+                                "subjects_passed": gpa.subjects_passed,
+                                "subjects_failed": gpa.subjects_failed,
+                            }
+
+                        prev_grades = {g["code"]: g for g in prev_data.get("grades", [])}
+                        for grade in new_data["grades"]:
+                            prev = prev_grades.get(grade["code"])
+                            if not prev:
+                                changes.append(f"🆕 New subject: **{grade['code']}** - {grade['name']}")
+                            elif prev["total"] != grade["total"] and grade["total"]:
+                                changes.append(
+                                    f"📝 Grade updated: **{grade['code']}** -> {grade['total']} (was {prev['total'] or 'N/A'})"
+                                )
+                            elif prev["status"] != grade["status"] and grade["status"]:
+                                changes.append(f"📋 Status changed: **{grade['code']}** -> {grade['status']}")
         except Exception as exc:
             logger.error(f"Daily check grades failed: {exc}")
             errors.append(f"Grades: {exc}")
@@ -394,28 +407,45 @@ class FAPScheduler:
 
         # --- Attendance ---
         try:
-            html = await self.auth.fetch_attendance(student_id=student_id)
+            campus = int(os.getenv("FAP_CAMPUS", "4"))
+            html = await self.auth.fetch_attendance(student_id=student_id, campus=campus)
             if html:
                 att_parser = AttendanceParser()
-                terms = att_parser.extract_terms(html)
-                if terms:
-                    current_term = next((t for t in terms if t.get("is_current")), terms[-1])
-                    att_html = await self.auth.fetch_attendance(
-                        student_id=student_id, term=current_term.get("id")
-                    )
-                    if att_html:
-                        att_items = att_parser.parse_attendance(att_html)
-                        new_data["attendance"] = [
-                            {
-                                "code": a.subject_code,
-                                "name": a.subject_name,
-                                "date": a.date,
-                                "slot": a.slot,
-                                "room": a.room,
-                                "status": a.attendance_status,
-                            }
-                            for a in att_items
-                        ]
+                courses = att_parser.extract_courses(html)
+
+                if courses:
+                    all_att = []
+                    for course in courses:
+                        if course.get("is_current"):
+                            items = att_parser.parse_attendance(html)
+                            for item in items:
+                                item.subject_code = course["code"]
+                                item.subject_name = course["name"]
+                            all_att.extend(items)
+                        elif course.get("course_id"):
+                            course_html = await self.auth.fetch_attendance(
+                                student_id=student_id,
+                                campus=campus,
+                                course=course["course_id"],
+                            )
+                            if course_html:
+                                items = att_parser.parse_attendance(course_html)
+                                for item in items:
+                                    item.subject_code = course["code"]
+                                    item.subject_name = course["name"]
+                                all_att.extend(items)
+
+                    new_data["attendance"] = [
+                        {
+                            "code": a.subject_code,
+                            "name": a.subject_name,
+                            "date": a.date,
+                            "slot": a.slot,
+                            "room": a.room,
+                            "status": a.attendance_status,
+                        }
+                        for a in all_att
+                    ]
         except Exception as exc:
             logger.error(f"Daily check attendance failed: {exc}")
             errors.append(f"Attendance: {exc}")
