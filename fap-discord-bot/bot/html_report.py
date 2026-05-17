@@ -16,6 +16,9 @@ def render_daily_report(data: dict) -> str:
     exams = data.get("exams", [])
     attendance = data.get("attendance", [])
     gpa_summary = data.get("gpa_summary", {})
+    stale = data.get("_stale", [])
+    last_fetch = data.get("_last_fetch", {})
+    stale_banner = _render_stale_banner(stale, last_fetch) if stale else ""
 
     return f"""<!DOCTYPE html>
 <html lang="vi">
@@ -63,6 +66,8 @@ tr:hover{{background:#1c2128}}
 .chart-container{{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin-top:16px}}
 .chart-row{{display:grid;grid-template-columns:1fr 1fr;gap:20px}}
 .empty{{color:#8b949e;font-style:italic;padding:20px;text-align:center}}
+.stale-banner{{background:#2d1b00;border:1px solid #d29922;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;font-size:0.9rem;color:#d29922}}
+.stale-tag{{display:inline-block;background:#2d1b00;color:#d29922;padding:1px 6px;border-radius:4px;font-size:0.7rem;margin-left:6px;vertical-align:middle}}
 .footer{{text-align:center;color:#484f58;font-size:0.8rem;margin-top:40px;padding-top:20px;border-top:1px solid #21262d}}
 @media(max-width:768px){{
 .chart-row{{grid-template-columns:1fr}}
@@ -79,6 +84,8 @@ tr:hover{{background:#1c2128}}
     <div>Cap nhat: {now}</div>
   </div>
 </div>
+
+{stale_banner}
 
 {_render_summary_cards(data)}
 
@@ -423,3 +430,26 @@ new Chart(document.getElementById('attendanceChart'), {{
     }}
   }}
 }});"""
+
+
+def _render_stale_banner(stale_sections: list, last_fetch: dict) -> str:
+    """Render a warning banner when some data is from a previous fetch."""
+    labels = {
+        "grades": "Diem so",
+        "schedule": "Lich hoc",
+        "exams": "Lich thi",
+        "attendance": "Diem danh",
+        "gpa_summary": "GPA",
+    }
+    items = []
+    for s in stale_sections:
+        label = labels.get(s, s)
+        fetched = last_fetch.get(s, "?")
+        items.append(f"<strong>{label}</strong> (cuoi cap nhat: {fetched})")
+
+    detail = ", ".join(items)
+    return f"""
+<div class="stale-banner">
+  <span>&#9888;&#65039;</span>
+  <div>Mot so du lieu khong the cap nhat (loi session). Dang hien thi du lieu cu: {detail}</div>
+</div>"""

@@ -55,8 +55,15 @@ class FAPBot(commands.Bot):
 
     async def _handle_auth_event(self, event: dict):
         """Forward auth lifecycle events to Discord."""
+        event_type = event.get("event_type", "")
         status = event.get("status", "info")
         detail = event.get("detail", "No detail provided.")
+
+        # Schedule session recovery on backoff instead of sending notification
+        if event_type == "backoff_active" and self.scheduler:
+            remaining = event.get("remaining_minutes", 30)
+            self.scheduler.schedule_session_recovery(remaining)
+            return
         reason = event.get("reason", "unknown")
 
         color = (

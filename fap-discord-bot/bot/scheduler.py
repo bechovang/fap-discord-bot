@@ -1,17 +1,18 @@
 """
-Background scheduler for attendance checks, daily snapshots, and session keepalive.
+Background scheduler for attendance checks and daily snapshots.
 """
 import asyncio
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Tuple
 
 import discord
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from bot.notifier import send_to_all_guilds
@@ -102,16 +103,9 @@ class FAPScheduler:
             name="Daily Check",
             replace_existing=True,
         )
-        self.scheduler.add_job(
-            self._session_keepalive,
-            IntervalTrigger(minutes=15, jitter=60),
-            id="session_keepalive",
-            name="Session Keepalive",
-            replace_existing=True,
-        )
 
         self.scheduler.start()
-        logger.info("Scheduler started with 3 jobs: attendance(15m), daily(22:07), keepalive(15m)")
+        logger.info("Scheduler started with 2 jobs: attendance(15m), daily(22:07)")
         asyncio.create_task(self._run_startup_daily_check())
 
     def stop(self):
@@ -450,6 +444,25 @@ class FAPScheduler:
             logger.error(f"Daily check attendance failed: {exc}")
             errors.append(f"Attendance: {exc}")
 
+        # --- Preserve old data for sections that failed to fetch ---
+        stale_sections = []
+        for key in ("grades", "gpa_summary", "schedule", "exams", "attendance"):
+            if key not in new_data and key in prev_data:
+                new_data[key] = prev_data[key]
+                stale_sections.append(key)
+
+        if stale_sections:
+            logger.warning(f"Using stale data for: {', '.join(stale_sections)}")
+
+        # Track last successful fetch time per section
+        last_fetch = prev_data.get("_last_fetch", {})
+        now_iso = datetime.now().isoformat(timespec="minutes")
+        for key in ("grades", "schedule", "exams", "attendance"):
+            if key in new_data and key not in stale_sections:
+                last_fetch[key] = now_iso
+        new_data["_last_fetch"] = last_fetch
+        new_data["_stale"] = stale_sections
+
         # --- Save snapshot ---
         try:
             with open(snapshot_file, "w", encoding="utf-8") as file:
@@ -509,17 +522,40 @@ class FAPScheduler:
             )
             await send_to_all_guilds(self.bot, dash_embed)
 
-    async def _session_keepalive(self):
+    def schedule_session_recovery(self, delay_minutes: int):
+        """Schedule a one-off session recovery attempt after backoff cooldown."""
+        job_id = "session_recovery"
+        existing = self.scheduler.get_job(job_id)
+        if existing:
+            logger.info("Session recovery already scheduled, skipping")
+            return
+
+        self.scheduler.add_job(
+            self._session_recovery,
+            trigger=DateTrigger(run_date=datetime.now() + timedelta(minutes=delay_minutes)),
+            id=job_id,
+            name="Session Recovery",
+            replace_existing=True,
+        )
+        logger.info(f"Session recovery scheduled in ~{delay_minutes} minutes")
+
+    async def _session_recovery(self):
+        """One-off attempt to recover the FAP session after backoff."""
         try:
-            session = await self.auth.get_session(force_refresh=False, fast_check=False)
+            session = await self.auth.get_session(force_refresh=True, fast_check=False)
             if session:
-                logger.debug("Session keepalive: session is valid")
+                await self._send_scheduler_report(
+                    "✅ Session Recovered",
+                    "FAP session đã khôi phục thành công. Bạn có thể dùng lệnh bình thường lại.",
+                    discord.Color.green(),
+                )
             else:
-                logger.warning("Session keepalive: session check failed and refresh did not recover it")
+                failures = self.auth._consecutive_refresh_failures
+                remaining = self.auth.get_backoff_remaining_minutes()
+                logger.warning(
+                    f"Session recovery failed (failures: {failures}, next retry in ~{remaining}m)"
+                )
+                if remaining > 0:
+                    self.schedule_session_recovery(remaining)
         except Exception as exc:
-            logger.error(f"Session keepalive failed: {exc}")
-            await self._send_scheduler_report(
-                "❌ Session Keepalive Failed",
-                f"Session keepalive crashed: `{exc}`",
-                discord.Color.red(),
-            )
+            logger.error(f"Session recovery failed: {exc}")

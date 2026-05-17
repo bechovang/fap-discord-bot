@@ -48,6 +48,8 @@ class FAPAuth:
         self._validator: Optional[SessionValidator] = None
         self._refreshing = False
         self._event_callback: Optional[Callable[[dict], Awaitable[None]]] = None
+        self._consecutive_refresh_failures: int = 0
+        self._last_refresh_failure_time: Optional[datetime] = None
         self._last_diagnostic = {
             "timestamp": None,
             "operation": "startup",
@@ -127,8 +129,30 @@ class FAPAuth:
             "refresh_retry_failed": f"Failed to fetch {operation}: refresh retry still could not access FAP.",
             "missing_credentials": f"Failed to fetch {operation}: FAP credentials are missing on the server.",
             "page_unavailable": f"Failed to fetch {operation}: FAP returned a login or unexpected page.",
+            "backoff_active": f"Session lỗi, sẽ thử lại sau ~{self.get_backoff_remaining_minutes()} phút.",
         }
         return failure_map.get(diag["code"], f"Failed to fetch {operation}: {diag['detail']}")
+
+    def should_attempt_refresh(self) -> bool:
+        """Check if enough cooldown has passed since last refresh failure (for background keepalive)."""
+        if self._consecutive_refresh_failures <= 1:
+            return True
+        if not self._last_refresh_failure_time:
+            return True
+        backoff_minutes = {2: 30, 3: 60, 4: 120}
+        backoff_secs = backoff_minutes.get(self._consecutive_refresh_failures, 240) * 60
+        elapsed = (datetime.utcnow() - self._last_refresh_failure_time).total_seconds()
+        return elapsed >= backoff_secs
+
+    def get_backoff_remaining_minutes(self) -> int:
+        """Return minutes until next refresh attempt is allowed."""
+        if self._consecutive_refresh_failures <= 1 or not self._last_refresh_failure_time:
+            return 0
+        backoff_minutes = {2: 30, 3: 60, 4: 120}
+        backoff_secs = backoff_minutes.get(self._consecutive_refresh_failures, 240) * 60
+        elapsed = (datetime.utcnow() - self._last_refresh_failure_time).total_seconds()
+        remaining = max(0, backoff_secs - elapsed)
+        return int(remaining // 60)
 
     async def _ensure_auth(self):
         """Ensure FAPAutoLogin instance is created"""
@@ -248,6 +272,8 @@ class FAPAuth:
                 success = await self._validator.refresh_session(headless=headless)
 
             if success:
+                self._consecutive_refresh_failures = 0
+                self._last_refresh_failure_time = None
                 self._record_diagnostic(
                     operation="refresh",
                     status="ok",
@@ -263,6 +289,8 @@ class FAPAuth:
                     code="refresh_ok",
                 )
             else:
+                self._consecutive_refresh_failures += 1
+                self._last_refresh_failure_time = datetime.utcnow()
                 self._record_diagnostic(
                     operation="refresh",
                     status="error",
@@ -315,6 +343,26 @@ class FAPAuth:
             code="page_unavailable",
             detail=f"Initial {operation} fetch returned no usable HTML.",
         )
+
+        if not self.should_attempt_refresh():
+            remaining = self.get_backoff_remaining_minutes()
+            logger.info(
+                f"{operation}: session refresh in cooldown (~{remaining}m remaining, "
+                f"{self._consecutive_refresh_failures} consecutive failures)"
+            )
+            self._record_diagnostic(
+                operation=operation,
+                status="warning",
+                code="backoff_active",
+                detail=f"Session refresh cooldown active. Will retry in ~{remaining} minutes.",
+            )
+            await self._emit_event(
+                event_type="backoff_active",
+                status="warning",
+                detail=f"Session refresh cooldown active after {self._consecutive_refresh_failures} failures.",
+                remaining_minutes=remaining,
+            )
+            return None
 
         if not self._browser_ready():
             logger.warning(f"{operation} fetch failed because browser context is unavailable; forcing re-login.")
