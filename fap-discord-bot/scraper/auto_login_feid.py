@@ -168,7 +168,9 @@ class FAPAutoLogin:
 
         # Wait for Cloudflare challenge to resolve
         # CF titles: "Just a moment..." (EN), "Chờ một chút..." (VI), etc.
-        cf_keywords = ("moment", "challenge", "chờ", "vui lòng chờ", "checking", "attention")
+        # Also treat any short/generic title as CF challenge if FAP elements are missing
+        cf_keywords = ("moment", "challenge", "chờ", "vui lòng chờ", "checking", "attention",
+                        "稍候", "잠시", "un instant", "einen moment", "attendi", "aguarde")
         turnstile_clicked = False
 
         for i in range(60):
@@ -181,7 +183,11 @@ class FAPAutoLogin:
                 if "btnloginFeId" in content or "drpSelectWeek" in content or "ddlCampus" in content:
                     logger.info(f"Page loaded: {title}")
                     return True
-                if i > 5:
+                # Only consider CF passed if we can find real FAP content
+                if i > 15 and ("fap" in title_lower or "fpt" in title_lower):
+                    logger.info(f"Title changed to: {title}")
+                    return True
+                if i > 30:
                     logger.info(f"Title changed to: {title}")
                     return True
 
