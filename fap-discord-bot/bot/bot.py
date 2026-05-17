@@ -22,6 +22,7 @@ from bot.commands.attendance import setup as setup_attendance
 from bot.commands.grade import setup as setup_grade
 from bot.commands.config import setup as setup_config
 from bot.scheduler import FAPScheduler
+from bot.web_server import start_web_server
 
 # Configure logging
 logging.basicConfig(
@@ -103,6 +104,9 @@ class FAPBot(commands.Bot):
             data_dir='data'
         )
         self.auth.set_event_callback(self._handle_auth_event)
+
+        # Start web server for HTML dashboard
+        self._web_runner = await start_web_server()
 
         # Validate the FAP session at startup so the bot can auto-login or
         # refresh immediately when cookies are missing or expired.

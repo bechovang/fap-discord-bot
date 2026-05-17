@@ -19,3 +19,5 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    ports:
+      - "8080:8080"

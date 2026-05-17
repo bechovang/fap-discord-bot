@@ -15,6 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from bot.notifier import send_to_all_guilds
+from bot.html_report import render_daily_report
 from scraper.attendance_parser import AttendanceParser
 from scraper.auth import FAPAuth
 from scraper.exam_parser import ExamParser
@@ -266,9 +267,10 @@ class FAPScheduler:
         new_data = {}
         changes = []
         errors = []
+        student_id = os.getenv("FAP_STUDENT_ID", "")
+        new_data["student_id"] = student_id
 
         # --- Grades ---
-        student_id = os.getenv("FAP_STUDENT_ID", "")
         try:
             if student_id:
                 html = await self.auth.fetch_grades(student_id=student_id)
@@ -286,11 +288,25 @@ class FAPScheduler:
                                 {
                                     "code": grade.subject_code,
                                     "name": grade.subject_name,
+                                    "credits": grade.credits,
+                                    "midterm": grade.mid_term,
+                                    "final": grade.final,
                                     "total": grade.total,
                                     "status": grade.status,
                                 }
                                 for grade in grades
                             ]
+
+                            gpa = self.grade_parser.calculate_gpa(grades)
+                            if gpa:
+                                new_data["gpa_summary"] = {
+                                    "term_gpa": round(gpa.term_gpa or 0, 2),
+                                    "cumulative_gpa": round(gpa.cumulative_gpa, 2),
+                                    "total_credits": gpa.total_credits,
+                                    "earned_credits": gpa.earned_credits,
+                                    "subjects_passed": gpa.subjects_passed,
+                                    "subjects_failed": gpa.subjects_failed,
+                                }
 
                             prev_grades = {grade["code"]: grade for grade in prev_data.get("grades", [])}
                             for grade in new_data["grades"]:
@@ -317,10 +333,14 @@ class FAPScheduler:
                 new_data["schedule"] = [
                     {
                         "code": item.subject_code,
+                        "name": item.subject_name,
                         "day": item.day,
                         "date": item.date,
                         "slot": item.slot,
                         "room": item.room,
+                        "start_time": item.start_time,
+                        "end_time": item.end_time,
+                        "instructor": item.instructor,
                     }
                     for item in items
                 ]
@@ -345,6 +365,7 @@ class FAPScheduler:
                 new_data["exams"] = [
                     {
                         "subject": exam.subject_code,
+                        "subject_name": exam.subject_name,
                         "date": exam.date,
                         "time": exam.time,
                         "room": exam.room,
@@ -371,6 +392,34 @@ class FAPScheduler:
             logger.error(f"Daily check exams failed: {exc}")
             errors.append(f"Exams: {exc}")
 
+        # --- Attendance ---
+        try:
+            html = await self.auth.fetch_attendance(student_id=student_id)
+            if html:
+                att_parser = AttendanceParser()
+                terms = att_parser.extract_terms(html)
+                if terms:
+                    current_term = next((t for t in terms if t.get("is_current")), terms[-1])
+                    att_html = await self.auth.fetch_attendance(
+                        student_id=student_id, term=current_term.get("id")
+                    )
+                    if att_html:
+                        att_items = att_parser.parse_attendance(att_html)
+                        new_data["attendance"] = [
+                            {
+                                "code": a.subject_code,
+                                "name": a.subject_name,
+                                "date": a.date,
+                                "slot": a.slot,
+                                "room": a.room,
+                                "status": a.attendance_status,
+                            }
+                            for a in att_items
+                        ]
+        except Exception as exc:
+            logger.error(f"Daily check attendance failed: {exc}")
+            errors.append(f"Attendance: {exc}")
+
         # --- Save snapshot ---
         try:
             with open(snapshot_file, "w", encoding="utf-8") as file:
@@ -378,6 +427,16 @@ class FAPScheduler:
         except Exception as exc:
             logger.error(f"Daily check snapshot save failed: {exc}")
             errors.append(f"Snapshot save: {exc}")
+
+        # --- Render HTML dashboard ---
+        try:
+            report_dir = Path("data")
+            report_dir.mkdir(parents=True, exist_ok=True)
+            html = render_daily_report(new_data)
+            (report_dir / "daily_report.html").write_text(html, encoding="utf-8")
+            logger.info("Daily report HTML rendered")
+        except Exception as exc:
+            logger.error(f"Daily report HTML render failed: {exc}")
 
         # --- Report ---
         if changes:
