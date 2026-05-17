@@ -69,10 +69,7 @@ class FAPAutoLogin:
             await self._trigger_feid_login()
 
             current_url = self._page.url
-            logger.info(f"After FeID trigger: {current_url[:100]}")
-
             if "feid.fpt.edu.vn" in current_url or "identity" in current_url:
-                logger.info("Redirected to FeID login page!")
                 await self._handle_feid_login()
             else:
                 if not await self._handle_non_redirected_login():
@@ -248,26 +245,19 @@ class FAPAutoLogin:
         except Exception:
             pass
 
-    async def _trigger_feid_login(self):
-        """Click the FeID login button or fall back to postback."""
-        logger.info("Looking for 'Login With FeID' button...")
-
+    async def _click_feid_button(self):
+        """Click the FeID login button. Returns True if button was found and clicked."""
         try:
             feid_button = self._page.locator("#ctl00_mainContent_btnloginFeId")
             if await feid_button.count() > 0:
-                logger.info("Found FeID button - clicking...")
                 await feid_button.click()
-                await asyncio.sleep(3)
-                return
+                return True
 
             text_button = self._page.locator("text=Login With FeID")
             if await text_button.count() > 0:
-                logger.info("Found FeID button by text - clicking...")
                 await text_button.first.click()
-                await asyncio.sleep(3)
-                return
+                return True
 
-            logger.info("Trying __doPostBack fallback for FeID login...")
             await self._page.evaluate(
                 """
                 () => {
@@ -278,9 +268,43 @@ class FAPAutoLogin:
                 }
                 """
             )
-            await asyncio.sleep(3)
+            return True
         except Exception as exc:
             logger.error(f"Error clicking FeID button: {exc}")
+            return False
+
+    async def _wait_for_feid_redirect(self, timeout: float = 15.0) -> bool:
+        """Wait for browser to navigate from FAP to feid.fpt.edu.vn."""
+        deadline = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < deadline:
+            url = self._page.url
+            if "feid.fpt.edu.vn" in url or "identity" in url:
+                return True
+            await asyncio.sleep(0.5)
+        return False
+
+    async def _trigger_feid_login(self):
+        """Click FeID button, then retry until redirect to FeID succeeds."""
+        MAX_RETRIES = 3
+        for attempt in range(1, MAX_RETRIES + 1):
+            logger.info(f"FeID login attempt {attempt}/{MAX_RETRIES}...")
+            if not await self._click_feid_button():
+                logger.error("Could not find or click FeID button")
+                return
+
+            redirected = await self._wait_for_feid_redirect(timeout=15.0)
+            if redirected:
+                logger.info("Redirected to FeID login page!")
+                return
+
+            logger.warning(
+                f"FeID redirect did not complete in 15s (attempt {attempt}). "
+                f"URL: {self._page.url[:100]}"
+            )
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(1)
+
+        logger.error(f"FeID redirect failed after {MAX_RETRIES} attempts")
 
     async def _handle_non_redirected_login(self) -> bool:
         """Try direct login or fail."""
