@@ -499,21 +499,36 @@ class FAPAutoLogin:
                 logger.warning(f"Redirected to FAP landing page - session expired: {final_url}")
                 return None
 
-            # Check 2: URL contains Login
+            # Check 2: Redirected to notification page
+            if 'Thongbao.aspx' in final_url and 'Thongbao.aspx' not in url:
+                logger.warning(f"Redirected to notification page: {final_url}")
+                return None
+
+            # Check 3: URL contains Login (but not inside a valid FAP page path)
             if "Login" in final_url and "ScheduleOfWeek" not in final_url:
                 logger.warning(f"Redirected to login page: {final_url}")
                 return None
 
-            # Check 3: Page content has login button = not authenticated
+            # Check 4: Page content has login button = not authenticated
             if 'btnloginFeId' in content:
                 logger.warning(f"Login button found in page content - session expired (URL: {final_url})")
                 return None
 
-            # Check 4: Cloudflare challenge still active
+            # Check 5: Cloudflare challenge still active
+            # Must match all CF locales used in _open_login_page()
             title = await self._page.title()
-            cf_keywords = ("just a moment", "checking your browser", "attention required", "vui lòng chờ")
+            cf_keywords = ("moment", "challenge", "chờ", "vui lòng chờ", "checking",
+                           "attention", "稍候", "잠시", "un instant", "einen moment",
+                           "attendi", "aguarde")
             if any(kw in title.lower() for kw in cf_keywords):
                 logger.warning(f"Cloudflare challenge still active: {title}")
+                return None
+
+            # Check 6: Page must be a valid FAP ASP.NET page
+            # A genuine FAP page always contains the ASP.NET form. If missing,
+            # we landed on a Cloudflare/error/redirect page, not FAP itself.
+            if 'aspnetForm' not in content and '__VIEWSTATE' not in content:
+                logger.warning(f"Page is not a valid FAP response (missing ASP.NET form): {final_url}")
                 return None
 
             return content

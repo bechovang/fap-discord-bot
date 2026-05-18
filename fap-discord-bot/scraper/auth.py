@@ -225,6 +225,16 @@ class FAPAuth:
                     code="session_invalid",
                     detail="Existing cookies failed the session health check.",
                 )
+                # Respect backoff cooldown unless caller explicitly forces refresh
+                if not force_refresh and not self.should_attempt_refresh():
+                    remaining = self.get_backoff_remaining_minutes()
+                    self._record_diagnostic(
+                        operation="session",
+                        status="warning",
+                        code="backoff_active",
+                        detail=f"Session invalid but refresh in cooldown (~{remaining}m remaining).",
+                    )
+                    return None
                 if not await self._refresh_session_once(reason="session_invalid"):
                     logger.warning("Session validation failed")
                     return None
