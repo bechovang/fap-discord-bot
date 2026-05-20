@@ -7,6 +7,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Dict, Tuple
 
 import discord
@@ -24,6 +25,8 @@ from scraper.grade_parser import GradeParser
 from scraper.parser import FAPParser, ScheduleItem
 
 logger = logging.getLogger(__name__)
+
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 SNAPSHOT_DIR = Path("data/snapshots")
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -121,7 +124,7 @@ class FAPScheduler:
             logger.error(f"Startup daily check failed: {exc}")
 
     async def _get_today_schedule(self) -> list[ScheduleItem]:
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = datetime.now(VN_TZ).strftime("%Y-%m-%d")
         if self._schedule_fetch_date == today_str and self._today_schedule:
             return self._today_schedule
 
@@ -130,7 +133,7 @@ class FAPScheduler:
             return []
 
         items = self.schedule_parser.parse_schedule(html)
-        today_items = self.schedule_parser.get_today_schedule(items)
+        today_items = self.schedule_parser.get_today_schedule(items, now=datetime.now(VN_TZ))
         self._today_schedule = today_items
         self._schedule_fetch_date = today_str
         logger.info(f"Fetched today's schedule: {len(today_items)} classes")
@@ -138,7 +141,7 @@ class FAPScheduler:
 
     async def _check_attendance(self):
         try:
-            now = datetime.now()
+            now = datetime.now(VN_TZ)
             today_str = now.strftime("%Y-%m-%d")
 
             if today_str != self._last_check_date:
@@ -335,8 +338,8 @@ class FAPScheduler:
             html = await self.auth.fetch_schedule()
             if html:
                 items = self.schedule_parser.parse_schedule(html)
-                self._today_schedule = self.schedule_parser.get_today_schedule(items)
-                self._schedule_fetch_date = datetime.now().strftime("%Y-%m-%d")
+                self._today_schedule = self.schedule_parser.get_today_schedule(items, now=datetime.now(VN_TZ))
+                self._schedule_fetch_date = datetime.now(VN_TZ).strftime("%Y-%m-%d")
                 new_data["schedule"] = [
                     {
                         "code": item.subject_code,
@@ -456,7 +459,7 @@ class FAPScheduler:
 
         # Track last successful fetch time per section
         last_fetch = prev_data.get("_last_fetch", {})
-        now_iso = datetime.now().isoformat(timespec="minutes")
+        now_iso = datetime.now(VN_TZ).isoformat(timespec="minutes")
         for key in ("grades", "schedule", "exams", "attendance"):
             if key in new_data and key not in stale_sections:
                 last_fetch[key] = now_iso
@@ -532,7 +535,7 @@ class FAPScheduler:
 
         self.scheduler.add_job(
             self._session_recovery,
-            trigger=DateTrigger(run_date=datetime.now() + timedelta(minutes=delay_minutes)),
+            trigger=DateTrigger(run_date=datetime.now(VN_TZ) + timedelta(minutes=delay_minutes)),
             id=job_id,
             name="Session Recovery",
             replace_existing=True,

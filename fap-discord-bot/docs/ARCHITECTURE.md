@@ -731,5 +731,37 @@ await asyncio.sleep(3)
 
 ---
 
-*Last Updated: 2025-01-07*
+*Last Updated: 2026-05-20*
 *Status: Production Ready*
+
+---
+
+## Timezone & Date Matching (Important)
+
+### Problem
+
+The Docker container runs in **UTC** (`datetime.now()` returns UTC), but FAP class times are in **Vietnam time (UTC+7)**. Additionally, FAP's day-of-week labels (`Mon`, `Tue`, etc.) do not always match the real calendar (e.g., FAP labels May 19 as "Mon" but it is actually Tuesday).
+
+### Solution
+
+All time-sensitive code in the scheduler and parser uses `datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))` to get correct Vietnam time. The `get_today_schedule()` method matches classes by **actual date** (e.g. `"21/05"`) instead of weekday labels.
+
+### Key Constants
+
+```python
+from zoneinfo import ZoneInfo
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+# Usage in scheduler:
+now = datetime.now(VN_TZ)  # Vietnam time, not UTC
+
+# Usage in parser:
+today = now.strftime("%d/%m")  # Match against FAP date headers
+```
+
+### Without This Fix
+
+| Time (VN) | `datetime.now()` (UTC) | Compared to 9:30-11:45 | Result |
+|-----------|----------------------|----------------------|--------|
+| 9:30 AM (class start) | 02:30 | 570-705 | MISS (too early) |
+| 4:30 PM (class over) | 09:30 | 570-705 | FALSE POSITIVE (7h late) |

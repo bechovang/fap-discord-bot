@@ -105,9 +105,11 @@ data/                Runtime data (cookies, snapshots, DB)
 
 - Attendance check runs every 15 minutes, but only inside real class windows from the weekly schedule.
 - Each class is checked from class start until 30 minutes after class end.
-- Daily check runs every day and sends either detected changes or a "no changes" summary.
+- All time comparisons use `datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))` to ensure correct Vietnam time, even though the Docker container runs in UTC.
+- Classes are matched by actual date (e.g. `"21/05"`) from FAP's schedule table headers, not by day-of-week labels, because FAP's labels (`Mon`, `Wed`, etc.) may not correspond to real calendar days.
+- Daily check runs every day at 22:07 VN time and sends either detected changes or a "no changes" summary.
 - The bot runs one daily check shortly after startup to warm the schedule cache and snapshot files.
-- Session keepalive runs every 15 minutes and performs a real session validation so transient proxy recovery can trigger automatic re-login quickly.
+- Session recovery uses exponential backoff: on repeated login failures, retries are spaced increasingly far apart instead of hammering Cloudflare.
 - Login/refresh attempts also produce Discord notifications.
 
 ## Troubleshooting

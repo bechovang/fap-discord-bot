@@ -11,6 +11,7 @@ import logging
 import sys
 import os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -24,6 +25,8 @@ from scraper.attendance_parser import AttendanceParser
 from scraper.parser import FAPParser
 
 logger = logging.getLogger(__name__)
+
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 class PendingChecksCommands(commands.Cog, name="pending"):
@@ -222,7 +225,7 @@ class PendingChecksCommands(commands.Cog, name="pending"):
                 }
 
             waiting = []
-            now = datetime.now()
+            now = datetime.now(VN_TZ)
 
             for exam in exams:
                 if exam.subject_code in graded_subjects:
@@ -278,10 +281,10 @@ class PendingChecksCommands(commands.Cog, name="pending"):
                 return []
 
             schedule_items = self.schedule_parser.parse_schedule(schedule_html)
-            today_items = self.schedule_parser.get_today_schedule(schedule_items)
+            today_items = self.schedule_parser.get_today_schedule(schedule_items, now=datetime.now(VN_TZ))
 
             unmarked = []
-            now = datetime.now()
+            now = datetime.now(VN_TZ)
 
             for item in today_items:
                 # Check if this class is in the past or currently happening
@@ -331,7 +334,7 @@ class PendingChecksCommands(commands.Cog, name="pending"):
                 return []
 
             upcoming = []
-            now = datetime.now()
+            now = datetime.now(VN_TZ)
 
             for exam in exams:
                 exam_datetime = self._parse_exam_datetime(exam.date, exam.time)
@@ -514,7 +517,7 @@ class PendingChecksCommands(commands.Cog, name="pending"):
                 timestamp=datetime.now()
             )
 
-            now = datetime.now()
+            now = datetime.now(VN_TZ)
 
             for item in unmarked[:10]:
                 # Calculate urgency based on class end time

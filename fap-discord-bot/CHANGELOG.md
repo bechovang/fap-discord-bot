@@ -2,6 +2,81 @@
 
 All notable changes to the FAP Discord Bot project.
 
+## [2026-05-20] - Fix Attendance Scheduler Timezone & Date Matching
+
+### Fixed
+
+#### Critical: Timezone Mismatch in Attendance Scheduler
+- **`bot/scheduler.py`** - All `datetime.now()` calls returned UTC time on the Docker container (system TZ = UTC), but were compared against FAP class times in Vietnam timezone (UTC+7)
+  - **Root cause:** `datetime.now()` returns system time (UTC in Docker), not Vietnam time. The APScheduler timezone was set to `Asia/Ho_Chi_Minh` but only affected job scheduling, not the code inside jobs.
+  - **Impact:** Attendance window check (`_is_in_attendance_window`) compared UTC clock against Vietnam class times, causing a 7-hour offset:
+    - Class 9:30-11:45 VN → bot thought it was active at UTC 09:30 (= VN 16:30, already over)
+    - Bot missed the actual window (VN 09:30-12:15) entirely and checked 7 hours late
+  - **Fix:** Added `from zoneinfo import ZoneInfo` and `VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")`. All 7 `datetime.now()` calls replaced with `datetime.now(VN_TZ)`:
+    - `_get_today_schedule()`: schedule fetch date caching
+    - `_check_attendance()`: attendance window time comparison
+    - `_daily_check()`: schedule parsing, snapshot timestamps
+    - `schedule_session_recovery()`: recovery job scheduling
+
+#### Critical: Day-of-Week Label Mismatch in Schedule Parser
+- **`scraper/parser.py`** - `get_today_schedule()` matched classes by FAP's day-of-week label (`'Mon'`, `'Wed'`, etc.) instead of actual date
+  - **Root cause:** FAP's day labels don't match the real calendar. Example from week 21/2026:
+    - FAP says "Mon 19/05" but May 19 is actually **Tuesday**
+    - FAP says "Wed 21/05" but May 21 is actually **Thursday**
+  - **Impact:** On Wednesday May 20 (no class), `datetime.now().weekday()` returned `2` → `'Wed'` → matched IOT102 (labeled 'Wed' but dated 21/05). Bot checked attendance for a class that was tomorrow.
+  - **Fix:** Rewrote `get_today_schedule()` to match by actual date string (`"dd/mm"`) using substring matching against `item.date`. Handles both zero-padded (`"09/05"`) and unpadded (`"9/5"`) formats. Accepts optional `now` parameter for timezone-correct date resolution.
+  - **Old method signature:** `get_today_schedule(items: List[ScheduleItem])`
+  - **New method signature:** `get_today_schedule(items: List[ScheduleItem], now: datetime = None)`
+
+#### Timezone Fixes in Command Files
+- **`bot/commands/pending_checks.py`** - Fixed 4 `datetime.now()` calls:
+  - Added `from zoneinfo import ZoneInfo` and `VN_TZ` constant
+  - `get_today_schedule()` call now passes `now=datetime.now(VN_TZ)`
+  - Exam date comparisons (`now = datetime.now(VN_TZ)`) in `/pending grades`, `/pending exams`, `/pending attendance`
+
+### Technical Details
+
+#### The Two-Bug Interaction
+
+Both bugs compounded each other. On Wednesday May 20, 2026:
+
+```
+Bug 1 (date matching):   Bot matched IOT102 (FAP label "Wed", actual date 21/05 Thursday)
+                          → thought IOT102 was today (wrong day)
+
+Bug 2 (timezone):         Bot used UTC 09:45 vs VN class time 9:30-11:45
+                          → thought class was in session at 4:45 PM VN (wrong time)
+
+Combined: Bot checked IOT102 attendance from 4:47 PM to 5:48 PM VN time,
+          when the class was actually on May 21 at 9:30 AM.
+```
+
+#### Timeline: What Happened vs What Should Happen
+
+```
+ACTUAL (broken):                          EXPECTED (fixed):
+─────────────────────────────────────────────────────────────────
+May 20 (Wed) - No class today             May 20 (Wed) - No class today
+  07:25 VN: Fetch schedule                  → No attendance checks all day
+           → "1 classes" (wrong!)         
+  09:45 VN: Check IOT102 attendance       May 21 (Thu) - IOT102 9:30-11:45
+           → session expired, login       09:30 VN: Window opens
+  10:02 VN: Login OK, fetch abort                  → Attendance check runs
+  16:16 VN: Attendance fetch OK           11:45 VN: Class ends
+           → class ended 5h ago           12:15 VN: Window closes (+30 min)
+  ...checks every 15min until 19:15 VN              → Final check, window closes
+```
+
+#### Files Changed
+
+| File | Changes |
+|------|---------|
+| `bot/scheduler.py` | +`ZoneInfo` import, +`VN_TZ` constant, 7× `datetime.now()` → `datetime.now(VN_TZ)`, 2× `get_today_schedule()` calls pass `now=` |
+| `scraper/parser.py` | `get_today_schedule()` rewritten: weekday label matching → actual date substring matching |
+| `bot/commands/pending_checks.py` | +`ZoneInfo` import, +`VN_TZ` constant, 1× `get_today_schedule()` call passes `now=`, 3× `datetime.now()` → `datetime.now(VN_TZ)` |
+
+---
+
 ## [2026-05-17] - HTML Dashboard, Parser Fixes, Login Reliability
 
 ### Added

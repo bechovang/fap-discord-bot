@@ -273,19 +273,13 @@ class FAPParser:
         """Filter schedule items by date"""
         return [item for item in items if date in item.date]
 
-    def get_today_schedule(self, items: List[ScheduleItem]) -> List[ScheduleItem]:
-        """Get schedule items for today"""
-        today_map = {
-            0: 'Mon',
-            1: 'Tue',
-            2: 'Wed',
-            3: 'Thu',
-            4: 'Fri',
-            5: 'Sat',
-            6: 'Sun'
-        }
-        today = today_map.get(datetime.now().weekday(), '')
-        return self.filter_by_day(items, today)
+    def get_today_schedule(self, items: List[ScheduleItem], now: datetime = None) -> List[ScheduleItem]:
+        """Get schedule items for today by matching actual date"""
+        if now is None:
+            now = datetime.now()
+        today_padded = now.strftime("%d/%m")
+        today_unpadded = f"{now.day}/{now.month}"
+        return [item for item in items if today_padded in item.date or today_unpadded in item.date]
 
     def format_for_discord(self, items: List[ScheduleItem], title: str = "Schedule") -> str:
         """Format schedule items for Discord message"""
