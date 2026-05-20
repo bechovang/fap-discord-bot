@@ -2,7 +2,7 @@
 
 All notable changes to the FAP Discord Bot project.
 
-## [2026-05-20] - Fix Attendance Scheduler Timezone & Date Matching
+## [2026-05-20] - Fix Attendance Scheduler Timezone
 
 ### Fixed
 
@@ -18,10 +18,10 @@ All notable changes to the FAP Discord Bot project.
     - `_daily_check()`: schedule parsing, snapshot timestamps
     - `schedule_session_recovery()`: recovery job scheduling
 
-#### Critical: Day-of-Week Label Mismatch in Schedule Parser
+#### Schedule Parser: Timezone-Aware Weekday Matching
 - **`scraper/parser.py`** - `get_today_schedule()` now accepts optional `now` parameter for timezone-correct weekday matching
-  - **Context:** FAP's date numbers in schedule table headers are often off by 1 day from the real calendar (e.g. FAP says "Wed 21/05" when the actual Wednesday is 20/05). However, the weekday labels (`Mon`, `Wed`, etc.) are correct and correspond to the actual day of week.
-  - **Fix:** Added optional `now` parameter so callers can pass timezone-aware datetime. The method still matches by FAP weekday label (which is correct), not by date string (which would fail because FAP dates are wrong).
+  - **Context:** FAP's date numbers in schedule table headers are off by 1 from the real calendar (e.g. FAP shows "Wed 21/05" when the actual Wednesday is 20/05). However, the weekday labels (`Mon`, `Wed`, etc.) correctly correspond to the real day of week.
+  - **Fix:** Added optional `now` parameter so callers can pass `datetime.now(VN_TZ)`. Without this, `datetime.now()` in the UTC Docker container could return the wrong weekday near midnight.
   - **Method signature:** `get_today_schedule(items: List[ScheduleItem], now: datetime = None)`
 
 #### Timezone Fixes in Command Files
@@ -32,34 +32,44 @@ All notable changes to the FAP Discord Bot project.
 
 ### Technical Details
 
-#### The Two-Bug Interaction
-
-The timezone bug was the only real issue. The day matching was correct all along:
+#### The Bug: UTC vs Vietnam Time
 
 ```
-Bug (timezone only):    Bot used UTC 09:45 vs VN class time 9:30-11:45
-                        → thought class was in session at 4:45 PM VN (wrong time)
-                        → missed actual window 9:30-12:15 VN
+Bot used datetime.now() which returns UTC in Docker container.
+Compared UTC clock against FAP class times (Vietnam / UTC+7).
 
-NOT a bug (day matching): FAP weekday labels (Mon, Wed, Thu) correctly match
-                           real weekdays. Only the date NUMBERS are off by 1.
-                           The old weekday matching was correct.
+Result: 7-hour offset. Bot thought class was in session at 4:30 PM VN,
+when the actual class was 9:30 AM VN and had ended hours ago.
 ```
 
-#### Timeline: What Happened vs What Should Happen
+#### Timeline: What Happened on Wednesday (IOT102 day)
 
 ```
-ACTUAL (broken):                          EXPECTED (fixed):
+BROKEN (old bot, UTC time):               FIXED (new bot, VN time):
 ─────────────────────────────────────────────────────────────────
-May 20 (Wed) - No class today             May 20 (Wed) - No class today
-  07:25 VN: Fetch schedule                  → No attendance checks all day
-           → "1 classes" (wrong!)         
-  09:45 VN: Check IOT102 attendance       May 21 (Thu) - IOT102 9:30-11:45
-           → session expired, login       09:30 VN: Window opens
-  10:02 VN: Login OK, fetch abort                  → Attendance check runs
-  16:16 VN: Attendance fetch OK           11:45 VN: Class ends
-           → class ended 5h ago           12:15 VN: Window closes (+30 min)
-  ...checks every 15min until 19:15 VN              → Final check, window closes
+Wed - IOT102 9:30-11:45                   Wed - IOT102 9:30-11:45
+
+VN 09:30 (UTC 02:30):                     VN 09:30:
+  now_mins=150 vs window 570-735            now_mins=570 vs window 570-735
+  150 < 570 → NOT in window (miss!)         570 >= 570 → IN WINDOW ✓
+  → Bot misses actual class time             → Attendance check runs ✓
+
+VN 16:30 (UTC 09:30):                     VN 16:30:
+  now_mins=570 vs window 570-735            now_mins=990 vs window 570-735
+  570 >= 570 → IN WINDOW (false alarm!)     990 > 735 → NOT in window ✓
+  → Class ended 5h ago, useless check        → Correctly stops checking
+```
+
+#### FAP Date vs Calendar Date
+
+```
+FAP schedule table (week 21/2026):
+  Mon (19/05) → 3 classes     ← FAP "Mon" = real Wednesday (off by 1 date)
+  Wed (21/05) → IOT102        ← FAP "Wed" = real Wednesday (label correct!)
+  Thu (22/05) → 3 classes     ← FAP "Thu" = real Thursday (label correct!)
+
+FAP date numbers are shifted, but weekday labels match real days.
+get_today_schedule() matches by label ('Mon','Wed',...) → correct.
 ```
 
 #### Files Changed

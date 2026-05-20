@@ -765,3 +765,16 @@ today = now.strftime("%d/%m")  # Match against FAP date headers
 |-----------|----------------------|----------------------|--------|
 | 9:30 AM (class start) | 02:30 | 570-705 | MISS (too early) |
 | 4:30 PM (class over) | 09:30 | 570-705 | FALSE POSITIVE (7h late) |
+
+### FAP Date Numbers vs Real Calendar
+
+FAP schedule date numbers can be off by 1 from the real calendar, but the weekday labels are correct:
+
+```
+FAP:  Mon (19/05)  Wed (21/05)  Thu (22/05)
+Real: Wed (20/05)  Wed (20/05)  Thu (21/05)
+      ↑ label "Wed" correctly matches real Wednesday
+        ↑ date "21/05" is wrong (real Wednesday is 20/05)
+```
+
+`get_today_schedule()` matches by weekday label → correct regardless of FAP date offset.
