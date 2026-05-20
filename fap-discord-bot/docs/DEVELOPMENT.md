@@ -481,16 +481,15 @@ class FAPParser:
         return items
 
     def get_today_schedule(self, items: List[ScheduleItem]) -> List[ScheduleItem]:
-        """Filter items for today's date by matching actual date string"""
-        # Uses date substring matching ("dd/mm") against item.date from FAP headers.
-        # Accepts optional `now` parameter for timezone-correct date resolution.
-        # Does NOT use weekday labels because FAP labels (Mon, Wed, etc.) may
-        # not match the real calendar (e.g. FAP "Mon 19/05" when 19/05 is Tuesday).
+        """Filter items for today by weekday label"""
+        # FAP date numbers can be off by 1 from real calendar, but weekday
+        # labels (Mon, Wed, etc.) are correct. Match by weekday, not date.
+        # Accepts optional `now` parameter for timezone-correct weekday resolution.
         if now is None:
             now = datetime.now()
-        today_padded = now.strftime("%d/%m")       # e.g. "09/05"
-        today_unpadded = f"{now.day}/{now.month}"   # e.g. "9/5"
-        return [item for item in items if today_padded in item.date or today_unpadded in item.date]
+        today_map = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun'}
+        today = today_map.get(now.weekday(), '')
+        return self.filter_by_day(items, today)
 
     def format_for_discord(self, items: List[ScheduleItem], title: str) -> str:
         """Format items for Discord message"""

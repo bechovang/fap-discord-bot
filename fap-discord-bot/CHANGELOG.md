@@ -19,14 +19,10 @@ All notable changes to the FAP Discord Bot project.
     - `schedule_session_recovery()`: recovery job scheduling
 
 #### Critical: Day-of-Week Label Mismatch in Schedule Parser
-- **`scraper/parser.py`** - `get_today_schedule()` matched classes by FAP's day-of-week label (`'Mon'`, `'Wed'`, etc.) instead of actual date
-  - **Root cause:** FAP's day labels don't match the real calendar. Example from week 21/2026:
-    - FAP says "Mon 19/05" but May 19 is actually **Tuesday**
-    - FAP says "Wed 21/05" but May 21 is actually **Thursday**
-  - **Impact:** On Wednesday May 20 (no class), `datetime.now().weekday()` returned `2` → `'Wed'` → matched IOT102 (labeled 'Wed' but dated 21/05). Bot checked attendance for a class that was tomorrow.
-  - **Fix:** Rewrote `get_today_schedule()` to match by actual date string (`"dd/mm"`) using substring matching against `item.date`. Handles both zero-padded (`"09/05"`) and unpadded (`"9/5"`) formats. Accepts optional `now` parameter for timezone-correct date resolution.
-  - **Old method signature:** `get_today_schedule(items: List[ScheduleItem])`
-  - **New method signature:** `get_today_schedule(items: List[ScheduleItem], now: datetime = None)`
+- **`scraper/parser.py`** - `get_today_schedule()` now accepts optional `now` parameter for timezone-correct weekday matching
+  - **Context:** FAP's date numbers in schedule table headers are often off by 1 day from the real calendar (e.g. FAP says "Wed 21/05" when the actual Wednesday is 20/05). However, the weekday labels (`Mon`, `Wed`, etc.) are correct and correspond to the actual day of week.
+  - **Fix:** Added optional `now` parameter so callers can pass timezone-aware datetime. The method still matches by FAP weekday label (which is correct), not by date string (which would fail because FAP dates are wrong).
+  - **Method signature:** `get_today_schedule(items: List[ScheduleItem], now: datetime = None)`
 
 #### Timezone Fixes in Command Files
 - **`bot/commands/pending_checks.py`** - Fixed 4 `datetime.now()` calls:
@@ -38,17 +34,16 @@ All notable changes to the FAP Discord Bot project.
 
 #### The Two-Bug Interaction
 
-Both bugs compounded each other. On Wednesday May 20, 2026:
+The timezone bug was the only real issue. The day matching was correct all along:
 
 ```
-Bug 1 (date matching):   Bot matched IOT102 (FAP label "Wed", actual date 21/05 Thursday)
-                          → thought IOT102 was today (wrong day)
+Bug (timezone only):    Bot used UTC 09:45 vs VN class time 9:30-11:45
+                        → thought class was in session at 4:45 PM VN (wrong time)
+                        → missed actual window 9:30-12:15 VN
 
-Bug 2 (timezone):         Bot used UTC 09:45 vs VN class time 9:30-11:45
-                          → thought class was in session at 4:45 PM VN (wrong time)
-
-Combined: Bot checked IOT102 attendance from 4:47 PM to 5:48 PM VN time,
-          when the class was actually on May 21 at 9:30 AM.
+NOT a bug (day matching): FAP weekday labels (Mon, Wed, Thu) correctly match
+                           real weekdays. Only the date NUMBERS are off by 1.
+                           The old weekday matching was correct.
 ```
 
 #### Timeline: What Happened vs What Should Happen
@@ -72,7 +67,7 @@ May 20 (Wed) - No class today             May 20 (Wed) - No class today
 | File | Changes |
 |------|---------|
 | `bot/scheduler.py` | +`ZoneInfo` import, +`VN_TZ` constant, 7× `datetime.now()` → `datetime.now(VN_TZ)`, 2× `get_today_schedule()` calls pass `now=` |
-| `scraper/parser.py` | `get_today_schedule()` rewritten: weekday label matching → actual date substring matching |
+| `scraper/parser.py` | `get_today_schedule()` added optional `now` parameter for timezone-correct weekday matching |
 | `bot/commands/pending_checks.py` | +`ZoneInfo` import, +`VN_TZ` constant, 1× `get_today_schedule()` call passes `now=`, 3× `datetime.now()` → `datetime.now(VN_TZ)` |
 
 ---

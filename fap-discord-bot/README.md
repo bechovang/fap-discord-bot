@@ -106,7 +106,7 @@ data/                Runtime data (cookies, snapshots, DB)
 - Attendance check runs every 15 minutes, but only inside real class windows from the weekly schedule.
 - Each class is checked from class start until 30 minutes after class end.
 - All time comparisons use `datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))` to ensure correct Vietnam time, even though the Docker container runs in UTC.
-- Classes are matched by actual date (e.g. `"21/05"`) from FAP's schedule table headers, not by day-of-week labels, because FAP's labels (`Mon`, `Wed`, etc.) may not correspond to real calendar days.
+- Classes are matched by weekday label (`Mon`, `Wed`, etc.) from FAP's schedule table. FAP's date numbers can be off by 1 from the real calendar, but the weekday labels are always correct.
 - Daily check runs every day at 22:07 VN time and sends either detected changes or a "no changes" summary.
 - The bot runs one daily check shortly after startup to warm the schedule cache and snapshot files.
 - Session recovery uses exponential backoff: on repeated login failures, retries are spaced increasingly far apart instead of hammering Cloudflare.
